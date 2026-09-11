@@ -1,0 +1,26 @@
+<div class="table" role="table" aria-label="Inventory">
+  <div class="row head">
+    <span>SKU</span><span>Product</span><span>Unit price</span><span>Stock</span><span></span>
+  </div>
+  @for (p of products; track p.id) {
+    <div class="row" role="row">
+      <span class="mono">{{ p.sku }}</span>
+      <span>{{ p.name }}</span>
+      <span>{{ p.unitPrice | currency }}</span>
+      <span>
+        @if (editingId !== p.id) {
+          <span class="stock" [class.low]="p.stock <= 10">{{ p.stock }}</span>
+          <button class="link" (click)="beginEdit(p)">edit</button>
+        } @else {
+          <input #stockInput [value]="draft" (input)="draft = stockInput.value" (keydown.enter)="commit(p)" type="number" min="0" aria-label="Stock for {{ p.sku }}" />
+          <button class="link ok" (click)="commit(p)">save</button>
+          <button class="link" (click)="cancel()">cancel</button>
+        }
+      </span>
+      <span></span>
+    </div>
+  }
+</div>
+@if (products.length === 0) {
+  <p class="empty">No products yet. Add your first SKU below.</p>
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${'Orders'})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: topbar}"></nav>
+
+<main>
+  <div class="page-head">
+    <div>
+      <h1>Orders</h1>
+      <p class="lede">Customer service workspace — search, refund, and manage fulfillment status.</p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span class="k">Total</span><span class="v" th:text="${#lists.size(orders)}">0</span></div>
+      <div class="kpi"><span class="k">Awaiting review</span><span class="v" th:text="${pendingCount}">0</span></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="search">
+      <span class="icon">&#128269;</span>
+      <input type="text" id="search" placeholder="Filter by order number or customer…" autocomplete="off"
+             data-testid="order-search" aria-label="Filter orders">
+    </label>
+  </div>
+
+  <table class="orders" id="orders-table">
+    <thead>
+    <tr>
+      <th>Order</th><th>Customer</th><th>SKU</th><th>Product</th><th>Total</th><th>Status</th><th></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="o : ${orders}" th:attr="data-row=${o.orderNumber}">
+      <td class="mono"><a th:href="@{/orders/{n}(n=${o.orderNumber})}" th:text="${o.orderNumber}">ORD-0000</a></td>
+      <td th:text="${o.customerName}">Name</td>
+      <td class="mono" th:text="${o.sku}">SKU</td>
+      <td th:text="${o.productName}">Product</td>
+      <td class="num" th:text="${#numbers.formatDecimal(o.total, 1, 2)}">0.00</td>
+      <td class="status-cell" th:insert="~{fragments/status-badge :: badge(${o})}">STATUS</td>
+      <td class="actions">
+        <button type="button" class="act ship" th:if="${o.status.name() == 'PENDING' or o.status.name() == 'PROCESSING'}"
+                th:attr="data-order=${o.orderNumber}" data-action="ship">Ship</button>
+        <button type="button" class="act refund" th:if="${o.status.name() != 'REFUNDED'}"
+                th:attr="data-order=${o.orderNumber}" data-action="refund">Refund</button>
+      </td>
+    </tr>
+    </tbody>
+  </table>
+  <p class="empty" th:if="${#lists.isEmpty(orders)}">No orders match your filter.</p>
+</main>
+
+<div th:replace="~{fragments/modal :: refundModal}"></div>
+<script th:src="@{/js/jquery-3.7.1.min.js}"></script>
+<script th:src="@{/js/console.js}"></script>
+</body>
+</html>

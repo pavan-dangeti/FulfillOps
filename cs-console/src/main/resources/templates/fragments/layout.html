@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title} + ' — FulfillOps CS'">FulfillOps CS</title>
+  <link rel="stylesheet" th:href="@{/css/console.css}">
+</head>
+<body>
+<nav th:fragment="topbar" class="topbar">
+  <a class="brand" th:href="@{/}">Fulfill<span>Ops</span> <small>CS Console</small></a>
+  <div class="nm">
+    <a th:href="@{/orders}" class="active">Orders</a>
+    <a th:href="@{/h2-console}" target="_blank">H2 Console</a>
+  </div>
+</nav>
+</body>
+</html>

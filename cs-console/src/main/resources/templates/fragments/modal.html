@@ -1,0 +1,10 @@
+<div th:fragment="refundModal" id="refund-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="refund-title">
+  <div class="modal-body">
+    <h2 id="refund-title">Confirm refund</h2>
+    <p>This will refund the customer's payment and mark the order as <strong>REFUNDED</strong>. This action cannot be undone.</p>
+    <div class="modal-actions">
+      <button type="button" id="cancel-refund" class="btn ghost">Cancel</button>
+      <button type="button" id="confirm-refund" class="btn danger">Refund payment</button>
+    </div>
+  </div>
+</div>

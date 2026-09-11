@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${'Order ' + order.orderNumber})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: topbar}"></nav>
+
+<main>
+  <a class="back" th:href="@{/orders}">&#8592; Back to orders</a>
+  <div class="detail-head" th:attr="data-row=${order.orderNumber}">
+    <h1 th:text="${order.orderNumber}">ORD-0000</h1>
+    <span class="status-cell" th:insert="~{fragments/status-badge :: badge(${order})}">STATUS</span>
+  </div>
+
+  <div class="detail-grid">
+    <div class="field"><span class="k">Customer</span><span class="v" th:text="${order.customerName}">Name</span></div>
+    <div class="field"><span class="k">Email</span><span class="v" th:text="${order.email}">email</span></div>
+    <div class="field"><span class="k">SKU</span><span class="v mono" th:text="${order.sku}">SKU</span></div>
+    <div class="field"><span class="k">Product</span><span class="v" th:text="${order.productName}">Product</span></div>
+    <div class="field"><span class="k">Quantity</span><span class="v" th:text="${order.quantity}">1</span></div>
+    <div class="field"><span class="k">Total</span><span class="v" th:text="${#numbers.formatDecimal(order.total, 1, 2)}">0.00</span></div>
+    <div class="field"><span class="k">Placed</span><span class="v" th:text="${#temporals.format(order.createdAt, 'yyyy-MM-dd HH:mm')}">date</span></div>
+    <div class="field"><span class="k">Refunded</span>
+      <span class="v" th:text="${order.refundedAt != null} ? ${#temporals.format(order.refundedAt, 'yyyy-MM-dd HH:mm')} : '—'">—</span>
+    </div>
+  </div>
+
+  <div class="actions" th:attr="data-row=${order.orderNumber}">
+    <button type="button" class="btn primary" th:if="${order.status.name() == 'PENDING' or order.status.name() == 'PROCESSING'}"
+            th:attr="data-order=${order.orderNumber}" data-action="ship">Mark shipped</button>
+    <button type="button" class="btn danger" th:if="${order.status.name() != 'REFUNDED'}"
+            th:attr="data-order=${order.orderNumber}" data-action="refund">Refund payment</button>
+  </div>
+</main>
+
+<div th:replace="~{fragments/modal :: refundModal}"></div>
+<script th:src="@{/js/jquery-3.7.1.min.js}"></script>
+<script th:src="@{/js/console.js}"></script>
+</body>
+</html>
