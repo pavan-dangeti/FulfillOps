@@ -1,0 +1,18 @@
+<h1>Inventory</h1>
+<p class="lede">Control stock levels across your catalog. Edits are reflected live in the shared state stream.</p>
+
+<div class="stats">
+  <div class="card"><span class="k">Total units</span><span class="v">{{ totalUnits$ | async }}</span></div>
+  <div class="card"><span class="k">Low-stock SKUs</span><span class="v">{{ lowStock$ | async }}</span></div>
+  <div class="card"><span class="k">SKUs tracked</span><span class="v">{{ (products$ | async)?.length }}</span></div>
+</div>
+
+<section class="panel">
+  <h2>Add product</h2>
+  <app-product-form (addProduct)="addProduct($event)" />
+</section>
+
+<section class="panel">
+  <h2>Stock control</h2>
+  <app-product-table [products]="(products$ | async) ?? []" (stockChange)="updateStock($event)" />
+</section>

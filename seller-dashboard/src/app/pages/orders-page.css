@@ -1,0 +1,12 @@
+h1 { margin: 0 0 0.25rem; }
+.lede { color: var(--muted); margin: 0 0 1.5rem; }
+.table { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 1.2fr 1.8fr 1.2fr 0.6fr 1fr 1.4fr; padding: 0.7rem 1rem; align-items: center; gap: 0.5rem; }
+.row + .row { border-top: 1px solid var(--line); }
+.head { background: var(--panel); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 0.85rem; }
+.badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; border: 1px solid transparent; }
+.pending { color: var(--warn-fg); background: var(--warn-bg); }
+.processing { color: var(--info-fg); background: var(--info-bg); }
+.shipped { color: var(--accent-fg); background: var(--accent-bg); }
+.delivered { color: var(--ok); background: var(--ok-bg); }

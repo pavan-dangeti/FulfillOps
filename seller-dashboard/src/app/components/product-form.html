@@ -1,0 +1,25 @@
+<form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <div class="field">
+    <label for="sku">SKU</label>
+    <input id="sku" formControlName="sku" data-testid="sku-input" type="text" placeholder="SKU-1006" />
+    @if (form.controls.sku.touched && form.controls.sku.invalid) {
+      <small class="err">@if (form.controls.sku.hasError('required')) {SKU is required} @else if (form.controls.sku.hasError('uniqueSku')) {SKU already exists}</small>
+    }
+  </div>
+  <div class="field">
+    <label for="name">Product name</label>
+    <input id="name" formControlName="name" data-testid="name-input" type="text" placeholder="Desk Lamp" />
+    @if (form.controls.name.touched && form.controls.name.hasError('required')) { <small class="err">Name is required</small> }
+  </div>
+  <div class="field">
+    <label for="unitPrice">Unit price</label>
+    <input id="unitPrice" formControlName="unitPrice" data-testid="price-input" type="number" min="0" step="0.01" />
+    @if (form.controls.unitPrice.touched && form.controls.unitPrice.hasError('min')) { <small class="err">Price cannot be negative</small> }
+  </div>
+  <div class="field">
+    <label for="stock">Initial stock</label>
+    <input id="stock" formControlName="stock" data-testid="stock-input" type="number" min="0" />
+    @if (form.controls.stock.touched && form.controls.stock.hasError('min')) { <small class="err">Stock cannot be negative</small> }
+  </div>
+  <button class="submit" type="submit" data-testid="add-product" [disabled]="form.invalid">Add product</button>
+</form>

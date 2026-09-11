@@ -1,0 +1,12 @@
+.table { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 1.2fr 2fr 1fr 1.4fr 0.4fr; padding: 0.7rem 1rem; align-items: center; gap: 0.5rem; }
+.row + .row { border-top: 1px solid var(--line); }
+.head { background: var(--panel); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 0.85rem; }
+.stock { font-variant-numeric: tabular-nums; }
+.stock.low { color: var(--danger); font-weight: 600; }
+button.link { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; margin-left: 0.5rem; }
+button.link:hover { text-decoration: underline; }
+button.link.ok { color: var(--ok); }
+input { width: 5.5rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }
+.empty { color: var(--muted); }

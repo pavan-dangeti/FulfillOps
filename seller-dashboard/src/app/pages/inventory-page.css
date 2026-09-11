@@ -1,0 +1,9 @@
+h1 { margin: 0 0 0.25rem; }
+.lede { color: var(--muted); margin: 0 0 1.5rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.card { padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; flex-direction: column; gap: 0.3rem; }
+.k { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.v { font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.panel { margin-bottom: 1.5rem; }
+.panel h2 { font-size: 1rem; margin: 0 0 0.9rem; }
+@media (max-width: 800px) { .stats { grid-template-columns: 1fr; } }

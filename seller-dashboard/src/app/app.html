@@ -1,0 +1,13 @@
+<header class="topbar">
+  <a class="brand" routerLink="/">Fulfill<span>Ops</span> <small>Seller</small></a>
+  <nav>
+    <a routerLink="/orders" routerLinkActive="active">Orders</a>
+    <a routerLink="/inventory" routerLinkActive="active">Inventory</a>
+  </nav>
+  <button class="auth" data-testid="auth-toggle" (click)="toggleAuth()">
+    {{ auth.isSignedIn() ? 'Sign out' : 'Sign in' }}
+  </button>
+</header>
+<main>
+  <router-outlet />
+</main>
