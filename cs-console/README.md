@@ -30,6 +30,13 @@ migrating it isn't worth the cost.
   is empty; H2 is in-memory with `ddl-auto: create-drop`.
 - `OrderService` owns the state transitions (`refund`, `ship`) and guards
   against refunding a refunded order.
+- `OpsApiController` (`@RestController`, `/api/ops/**`) is a small read-only
+  JSON feed added for `ops-floor/`'s 3D visualization — `GET /api/ops/orders`
+  and `GET /api/ops/health`. It sits next to `OrderController`, not inside
+  it: the Thymeleaf routes stay `@Controller`/fragment-returning and
+  same-origin, this one returns an `OrderView` record (never the JPA entity
+  directly — `open-in-view: false` stays in force) and is the only thing
+  covered by CORS (`OpsCorsConfig`, `http://localhost:5174` only).
 
 ## Run
 

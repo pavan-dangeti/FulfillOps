@@ -25,6 +25,11 @@ export default defineConfig({
       name: 'spring',
       testMatch: /spring\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:8080' }
+    },
+    {
+      name: 'ops-floor',
+      testMatch: /ops-floor\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5174' }
     }
   ],
 
@@ -40,6 +45,13 @@ export default defineConfig({
       command: './mvnw -q spring-boot:run',
       cwd: '../cs-console',
       url: 'http://localhost:8080',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000
+    },
+    {
+      command: 'npm run dev -- --port 5174 --strictPort',
+      cwd: '../ops-floor',
+      url: 'http://localhost:5174',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000
     }

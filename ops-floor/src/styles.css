@@ -1,0 +1,341 @@
+/* Design tokens — identical block to seller-dashboard/src/styles.css and
+   cs-console/src/main/resources/static/css/console.css. Reused verbatim so the
+   three apps are visually one product. Do not invent a palette here. */
+:root {
+  --bg: #0f1115;
+  --panel: #171a20;
+  --line: #262b33;
+  --fg: #e8eaed;
+  --muted: #8b93a1;
+  --accent: #5b8cff;
+  --accent-bg: rgba(91, 140, 255, 0.12);
+  --accent-fg: #9db9ff;
+  --danger: #ff6b6b;
+  --ok: #3ecf8e;
+  --ok-bg: rgba(62, 207, 142, 0.12);
+  --warn-fg: #f0b429;
+  --warn-bg: rgba(240, 180, 41, 0.12);
+  --info-fg: #4cc2ff;
+  --info-bg: rgba(76, 194, 255, 0.12);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ops-floor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.ops-floor > canvas { display: block; }
+
+/* ---------- HUD ---------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.hud .panel {
+  pointer-events: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.hud-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  pointer-events: auto;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.hud-top .brand {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hud-top .stat { font-variant-numeric: tabular-nums; }
+.hud-top .stat b { color: var(--fg); font-weight: 600; }
+.hud-top .stat .mono { font-family: var(--mono); }
+.hud-top .stat.divergence b { color: var(--danger); font-size: 14px; }
+.hud-top .note { color: var(--muted); font-style: italic; }
+
+.hud-mid {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.hud-rail {
+  align-self: flex-start;
+  margin: 12px 0 0 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 168px;
+}
+
+.hud-rail h3 {
+  margin: 2px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hud-rail button {
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.hud-rail button:hover { color: var(--fg); border-color: var(--muted); }
+.hud-rail button.on { color: var(--fg); border-color: var(--accent); background: var(--accent-bg); }
+.hud-rail button .count { float: right; font-family: var(--mono); font-size: 11px; }
+
+.hud-inspector {
+  align-self: flex-start;
+  margin: 12px 12px 0 0;
+  width: 320px;
+  max-height: calc(100% - 140px);
+  overflow: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-inspector h3 {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hud-inspector .rec { font-variant-numeric: tabular-nums; }
+.hud-inspector .rec .row { display: flex; gap: 10px; font-size: 12px; }
+.hud-inspector .rec .row dt { width: 84px; color: var(--muted); flex-shrink: 0; }
+.hud-inspector .rec .row dd { margin: 0; font-family: var(--mono); font-size: 12px; }
+
+.diff {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.diff table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.diff th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.diff td {
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  vertical-align: top;
+}
+
+.diff td.field { color: var(--muted); font-family: var(--mono); }
+.diff tr.mismatch td { color: var(--danger); }
+.diff tr.mismatch td.field { color: var(--danger); }
+
+.hud-log {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  pointer-events: auto;
+  height: 148px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-log h3 {
+  margin: 0;
+  padding: 6px 14px 2px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.log-scroll {
+  overflow-y: auto;
+  position: relative;
+  flex: 1;
+}
+
+.log-spacer { position: absolute; width: 1px; }
+
+.log-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  cursor: pointer;
+  border-top: 1px solid transparent;
+}
+
+.log-row:hover { background: rgba(255, 255, 255, 0.03); }
+.log-row.selected { background: var(--accent-bg); color: var(--fg); }
+.log-row .t { font-family: var(--mono); font-size: 11px; width: 74px; flex-shrink: 0; }
+.log-row .kind { width: 46px; flex-shrink: 0; text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; }
+.log-row .kind.refund { color: var(--danger); }
+.log-row .kind.ship { color: var(--info-fg); }
+.log-row .kind.stock { color: var(--ok); }
+.log-row .kind.info { color: var(--muted); }
+
+.hover-diff {
+  position: absolute;
+  left: 50%;
+  bottom: 160px;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 300px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--danger);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hover-diff h4 {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.hud-keys {
+  position: absolute;
+  right: 14px;
+  bottom: 160px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  text-align: right;
+  pointer-events: none;
+}
+
+/* stats overlay (?stats=1) */
+.stats-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 160px;
+  z-index: 30;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.scene-state-note {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 44px;
+  font-size: 11px;
+  color: var(--danger);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 3px 10px;
+  pointer-events: none;
+}
+
+/* ---------- 3D labels (drei Html) ---------- */
+
+.label-3d {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+  background: rgba(15, 17, 21, 0.82);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  white-space: nowrap;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.label-3d .name { color: var(--muted); margin-left: 6px; }
+.label-3d.plane { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+.label-3d.plane.seller { border-color: var(--accent); color: var(--accent-fg); }
+.label-3d.plane.cs { border-color: var(--info-fg); color: var(--info-fg); }
+.label-3d.lane { font-size: 10px; color: var(--muted); border: none; background: rgba(15, 17, 21, 0.6); }
+.label-3d.lane.refunded { color: var(--danger); }
+.label-3d.dimmed { opacity: 0.18; }
+
+/* ---------- WebGL fallback table ---------- */
+
+.fallback {
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+
+.fallback h1 { font-size: 16px; }
+.fallback h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.fallback table { border-collapse: collapse; margin-bottom: 24px; font-size: 13px; }
+.fallback th, .fallback td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
+.fallback th { color: var(--muted); font-weight: 600; }
+.fallback .mono { font-family: var(--mono); }
