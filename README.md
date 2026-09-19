@@ -6,18 +6,29 @@
 
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](./LICENSE)
 [![Status](https://img.shields.io/badge/Status-Working_Simulation-blue?style=for-the-badge)]()
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Ops_Floor-black?style=for-the-badge&logo=vercel&logoColor=white)](https://fulfill-ops.vercel.app)
 
 ![Angular](https://img.shields.io/badge/Angular_21-DD0031?style=flat-square&logo=angular&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot_3-6DB33F?style=flat-square&logo=spring&logoColor=white)
 ![Java](https://img.shields.io/badge/Java_21-007396?style=flat-square&logo=openjdk&logoColor=white)
 ![Thymeleaf](https://img.shields.io/badge/Thymeleaf-005F0F?style=flat-square&logo=thymeleaf&logoColor=white)
-![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)
+![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat-square&logo=three.js&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite_6-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)
 
 > A working simulation of the split-stack reality of e-commerce at scale: a modern SPA for sellers and a server-rendered console for customer service, integrated around one shared domain (orders, inventory, fulfillment), rendered spatially by a Three.js visualization, and validated end-to-end by a single automated test suite.
 
+**[→ Try the live 3D visualization](https://fulfill-ops.vercel.app)** — no install required.
+
 </div>
+
+<p align="center">
+  <img src="docs/ops-floor-screenshot.png" alt="Ops Floor — a Three.js scene showing seller and CS order parcels on status lanes, SKU stock towers, and dashed divergence arcs connecting orders that disagree between the two stores" width="100%" />
+</p>
+
+<p align="center"><em>Ops Floor: seller orders (left, Angular) and CS orders (right, Spring) on one floor. Dashed arcs mark the four orders that exist in both stores and disagree — the same store-isolation trade <code>TRADEOFFS.md</code> documents, made visible instead of left to be discovered by reading two files side by side.</em></p>
 
 ---
 
@@ -34,11 +45,17 @@ Each service has its own `README.md` explaining why its stack was chosen. `TRADE
 
 ---
 
-## ✨ Why two stacks?
+## ✨ Why two stacks — and a third view
 
 FulfillOps intentionally mirrors a common real-world scenario: a modern reactive frontend for one user type (sellers) sitting alongside a legacy-style server-rendered console for another (customer service reps) — both driven off the same underlying order/inventory domain. It's a deliberate exercise in split-stack integration, not a monolith.
 
 `ops-floor/` adds a third view of that same domain, not a fourth store: it reads the seller and CS data and renders both on one floor, drawing an arc between any order that exists in both stores and disagrees. That disagreement is the same store-isolation trade `TRADEOFFS.md` documents — this app just makes it visible instead of leaving it to be discovered by reading two `DataSeeder`/`OrdersService` files side by side.
+
+**A few things worth a closer look if you're reviewing the code:**
+
+- **Rendering discipline, not just a scene.** `ops-floor/` runs `frameloop="demand"` (zero GPU work while idle), batches every parcel/tower/lane into a handful of `InstancedMesh` draw calls, and patches one shared material via `onBeforeCompile` instead of cloning materials per object. `?stats=1` exposes draw calls and triangle count live.
+- **A canvas is opaque to a test runner — so it isn't treated as one.** Every piece of scene state (selection, visible count, divergence count, camera preset, pause state, and a `sceneReady` flag for the first committed frame) is mirrored into a hidden DOM node, so Playwright asserts on rendered state the same way it does for the Angular and Thymeleaf apps — see `e2e-tests/tests/ops-floor.spec.ts`.
+- **Graceful degradation.** No WebGL2 → a real HTML table, not an error screen. `prefers-reduced-motion` → lane transitions jump-cut instead of easing. `webglcontextlost`/`restored` is handled explicitly.
 
 ---
 
