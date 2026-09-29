@@ -1,0 +1,42 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: inventory-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fulfillops}
+    username: ${DB_USER:inventory_svc}
+    password: ${DB_PASSWORD:}
+    hikari:
+      schema: inventory_svc # search_path for every pooled connection, so plain SQL finds this service's tables
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: inventory_svc
+  flyway:
+    schemas: inventory_svc
+    default-schema: inventory_svc
+  mvc:
+    problemdetails:
+      enabled: true
+
+fulfillops:
+  security:
+    jwt-secret: ${JWT_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo

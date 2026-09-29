@@ -15,6 +15,7 @@
   <description>Shared build for the backend services: each owns one Postgres schema, migrated by Flyway</description>
 
   <modules>
+    <module>inventory-service</module>
   </modules>
 
   <dependencies>
