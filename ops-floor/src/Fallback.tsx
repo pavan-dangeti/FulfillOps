@@ -24,7 +24,7 @@ export function Fallback() {
           ))}
         </tbody>
       </table>
-      <h2>Seller orders (Angular, in-memory)</h2>
+      <h2>Seller orders</h2>
       <table>
         <thead>
           <tr><th>Order</th><th>Customer</th><th>SKU</th><th>Qty</th><th>Total</th><th>Status</th></tr>
@@ -42,7 +42,7 @@ export function Fallback() {
           ))}
         </tbody>
       </table>
-      <h2>CS orders (Spring, H2)</h2>
+      <h2>CS orders</h2>
       <table>
         <thead>
           <tr><th>Order</th><th>Customer</th><th>SKU</th><th>Qty</th><th>Total</th><th>Status</th></tr>
