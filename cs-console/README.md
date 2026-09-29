@@ -39,8 +39,10 @@ migrating it isn't worth the cost.
 - `OpsApiController` (`/api/ops/**`) is a read-only JSON feed for `ops-floor/`.
   It needs no user session: it signs in to order-service with a dedicated
   read-only OPS account (`OPS_FEED_PASSWORD`), caches that token until a
-  minute before expiry, and never receives customer emails. It is the only
-  path covered by CORS (`OpsCorsConfig`, `http://localhost:5174` only).
+  minute before expiry, and never receives customer emails. Because it is
+  public it serves initials instead of names and caches the list for two
+  seconds, so anonymous callers cannot multiply load on order-service. It is
+  the only path covered by CORS (`OpsCorsConfig`, `http://localhost:5174` only).
 
 ## Run
 

@@ -28,15 +28,26 @@ an SSR team a full framework would be the expensive migration this project
 exists to *avoid*, and a few dozen lines of jQuery deliver the interactions a
 CS rep needs.
 
-## Authentication: HS256 tokens from order-service
+## Authentication: RS256 tokens from order-service
 
-order-service exchanges an operator's password for a one-hour JWT, and every
-service validates it with the same HS256 secret. That is the simplest thing
-that gives real, per-role authorization across services. The cost is that any
-service holding the secret could also mint tokens. The upgrade path is for
-order-service to sign with RS256 and publish a JWKS endpoint, so the other
-services only ever hold the public key. There is no login rate limiting in the
-services themselves; it belongs at the reverse proxy in front of a public
+order-service exchanges an operator's password for a one-hour JWT signed with
+RS256, and publishes only the public key at `/.well-known/jwks.json`. The other
+services verify tokens against that JWKS and hold no key that could sign one,
+so compromising inventory, payment or fulfilment does not let an attacker mint
+tokens. (An earlier version shared one HS256 secret across all services, which
+gave every service the power to forge any role.) Verifiers accept RS256 only,
+which blocks the "sign HS256 with the public key" confusion attack; this, a
+foreign key, a wrong issuer and expiry are covered by `TokenVerificationTest`.
+
+The cost: the signing key is generated at startup and held in memory, so a
+restart of order-service invalidates issued tokens (users sign in again) and
+order-service cannot run as several replicas. Loading the key from a secret
+store removes both limits.
+
+Sign-in is throttled per account: after five consecutive wrong passwords the
+account is refused (429) for a minute. That caps online guessing without
+letting an attacker lock an operator out for long. The count is in memory and
+per instance; per-IP limits belong at the reverse proxy in front of a public
 deployment.
 
 The seller dashboard keeps its token in memory only, so a page reload signs the
@@ -85,5 +96,7 @@ stream endpoint next to `OpsApiController` and replacing `LiveSource`'s
 two separate stores disagreeing. Now that sellers and CS read the same order
 store, a live seller plane would simply mirror the CS plane, so live mode still
 polls only the CS feed and the seller plane stays seed-backed. The HUD says so
-explicitly. That feed is read-only and signs in to order-service with a
-dedicated OPS account that never receives customer emails.
+explicitly. That feed is public and read-only, so it carries initials instead
+of customer names and no emails, and it is cached for two seconds so anonymous
+traffic cannot multiply load on order-service. It signs in to order-service
+with a dedicated read-only OPS account.

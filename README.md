@@ -57,7 +57,7 @@
                                fulfilment-service ─► fulfilment_svc ┘
 ```
 
-Each service's database role owns exactly one schema and has no rights on any other, so services cannot read each other's tables (checked by `scripts/check-schema-isolation.sh` in CI). Every service is a stateless JWT resource server; `order-service` signs one-hour tokens for the operator accounts (seller, CS, and a read-only ops account). `payment-service` and `fulfilment-service` implement idempotent charge/refund and allocate/cancel/ship operations with a read-only HTTP API; no order flow calls them yet.
+Each service's database role owns exactly one schema and has no rights on any other, so services cannot read each other's tables (checked by `scripts/check-schema-isolation.sh` in CI). Every service is a stateless JWT resource server. `order-service` signs one-hour RS256 tokens for the operator accounts (seller, CS, and a read-only ops account) and publishes only its public key at `/.well-known/jwks.json`; the other services verify against it and cannot sign tokens themselves. `payment-service` and `fulfilment-service` implement idempotent charge/refund and allocate/cancel/ship operations with a read-only HTTP API; no order flow calls them yet.
 
 Each app has its own `README.md` explaining why its stack was chosen. `TRADEOFFS.md` documents the notable compromises.
 
