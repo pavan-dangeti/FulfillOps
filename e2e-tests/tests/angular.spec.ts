@@ -1,9 +1,18 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+import { seller } from './accounts';
+
+async function signIn(page: Page): Promise<void> {
+  await page.goto('/');
+  await expect(page).toHaveURL(/login/);
+  await page.getByTestId('username').fill(seller.username);
+  await page.getByTestId('password').fill(seller.password);
+  await page.getByTestId('sign-in').click();
+  await expect(page).toHaveURL(/orders/);
+}
 
 test.describe('Seller Dashboard (Angular)', () => {
   test('form submission adds the product to the inventory list', async ({ page }) => {
-    await page.goto('/');
-    await page.getByTestId('auth-toggle').click();
+    await signIn(page);
     await page.getByRole('link', { name: 'Inventory' }).click();
 
     const table = page.locator('app-product-table');
@@ -23,8 +32,7 @@ test.describe('Seller Dashboard (Angular)', () => {
   });
 
   test('inline stock edit is reflected without reload', async ({ page }) => {
-    await page.goto('/');
-    await page.getByTestId('auth-toggle').click();
+    await signIn(page);
     await page.getByRole('link', { name: 'Inventory' }).click();
 
     const row = page.locator('app-product-table .row').filter({ hasText: 'SKU-1001' });
@@ -38,9 +46,32 @@ test.describe('Seller Dashboard (Angular)', () => {
     await expect(row).not.toContainText('142');
   });
 
+  test('orders come from order-service', async ({ page }) => {
+    await signIn(page);
+
+    const row = page.locator('[role="row"]').filter({ hasText: 'ORD-1047' });
+    await expect(row).toContainText('Diego Fernandez');
+    await expect(row).toContainText('DELIVERED');
+  });
+
   test('inventory route is guarded until signed in', async ({ page }) => {
     await page.goto('/inventory');
-    await expect(page).toHaveURL(/orders/);
+    await expect(page).toHaveURL(/login/);
     await expect(page.locator('app-product-table')).toHaveCount(0);
+  });
+
+  test('wrong password is rejected', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByTestId('username').fill(seller.username);
+    await page.getByTestId('password').fill('not-the-password');
+    await page.getByTestId('sign-in').click();
+    await expect(page.getByTestId('login-error')).toHaveText('Invalid username or password');
+    await expect(page).toHaveURL(/login/);
+  });
+
+  test('?demo=1 runs offline on seed data without signing in', async ({ page }) => {
+    await page.goto('/?demo=1');
+    await expect(page.getByTestId('demo-badge')).toBeVisible();
+    await expect(page.locator('[role="row"]').filter({ hasText: 'ORD-1042' })).toContainText('Ava Chen');
   });
 });

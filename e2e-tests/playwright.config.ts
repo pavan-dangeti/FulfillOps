@@ -6,6 +6,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
+  // Starts the backend (Postgres, services, CS console) from a clean database; see global-setup.ts.
+  globalSetup: './global-setup.ts',
   use: {
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
@@ -33,18 +35,12 @@ export default defineConfig({
     }
   ],
 
+  // The CS console runs in the compose stack; the two frontends run as dev servers.
   webServer: [
     {
       command: 'npm run start -- --host 127.0.0.1',
       cwd: '../seller-dashboard',
       url: 'http://localhost:4200',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000
-    },
-    {
-      command: './mvnw -q spring-boot:run',
-      cwd: '../cs-console',
-      url: 'http://localhost:8080',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000
     },
