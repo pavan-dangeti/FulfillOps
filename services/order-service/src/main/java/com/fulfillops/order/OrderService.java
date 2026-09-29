@@ -1,6 +1,7 @@
 package com.fulfillops.order;
 
 import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
@@ -34,7 +35,8 @@ public class OrderService {
 
     public Order refund(String orderNumber) {
         Order order = get(orderNumber);
-        order.refund(clock.instant());
+        // Postgres timestamptz keeps microseconds; truncating here makes the first response match every later read.
+        order.refund(clock.instant().truncatedTo(ChronoUnit.MICROS));
         return orders.saveAndFlush(order);
     }
 
