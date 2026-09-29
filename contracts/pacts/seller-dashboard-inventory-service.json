@@ -1,0 +1,349 @@
+{
+  "consumer": {
+    "name": "seller-dashboard"
+  },
+  "interactions": [
+    {
+      "description": "a request for the catalog",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "product SKU-1001 exists with 142 units on hand"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": [
+            "Bearer token"
+          ]
+        },
+        "matchingRules": {
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^Bearer .+$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "GET",
+        "path": "/api/products"
+      },
+      "response": {
+        "body": {
+          "content": [
+            {
+              "id": "SKU-1001",
+              "name": "Wireless Mouse",
+              "sku": "SKU-1001",
+              "stock": 142,
+              "unitPrice": 24.99
+            }
+          ],
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$[*].id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].sku": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].stock": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$[*].unitPrice": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "decimal"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a request to add a SKU that already exists",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "product SKU-1001 exists with 142 units on hand"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "name": "Another Mouse",
+            "sku": "SKU-1001",
+            "stock": 1,
+            "unitPrice": 20
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Authorization": [
+            "Bearer token"
+          ],
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^Bearer .+$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/api/products"
+      },
+      "response": {
+        "status": 409
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a request to add product SKU-TEST-1",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "no product SKU-TEST-1 exists"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "name": "Test Lamp",
+            "sku": "SKU-TEST-1",
+            "stock": 9,
+            "unitPrice": 12.5
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Authorization": [
+            "Bearer token"
+          ],
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^Bearer .+$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/api/products"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "id": "SKU-TEST-1",
+            "name": "Test Lamp",
+            "sku": "SKU-TEST-1",
+            "stock": 9,
+            "unitPrice": 12.5
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.unitPrice": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "decimal"
+                }
+              ]
+            }
+          }
+        },
+        "status": 201
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a stock update for SKU-1001",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "product SKU-1001 exists with 142 units on hand"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "stock": 33
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Authorization": [
+            "Bearer token"
+          ],
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "header": {
+            "Authorization": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^Bearer .+$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "PUT",
+        "path": "/api/products/SKU-1001/stock"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "id": "SKU-1001",
+            "name": "Wireless Mouse",
+            "sku": "SKU-1001",
+            "stock": 33,
+            "unitPrice": 24.99
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.sku": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.unitPrice": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "decimal"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "17.1.4"
+    },
+    "pactRust": {
+      "ffi": "0.5.8",
+      "models": "1.3.16"
+    },
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  },
+  "provider": {
+    "name": "inventory-service"
+  }
+}
