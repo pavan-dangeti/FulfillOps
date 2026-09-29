@@ -8,10 +8,11 @@ disagree) becomes the picture.
 
 ## Why a third app, and why Three.js
 
-- **The divergence is the point, and a table can't show it well.** ORD-1039
-  through ORD-1042 exist in both the Angular `BehaviorSubject` and the Spring
-  H2 store, with different customers, quantities, statuses and totals —
-  `TRADEOFFS.md` documents that as deliberate store isolation. A side-by-side
+- **The divergence is the point, and a table can't show it well.** In the
+  project's original design, ORD-1039 through ORD-1042 existed in both the
+  Angular in-memory store and the Spring H2 store, with different customers,
+  quantities, statuses and totals. The seed mode replays that dataset (the
+  apps now share one order store; see `TRADEOFFS.md`). A side-by-side
   table makes you diff four rows by eye. A spatial view can put both parcels
   on the floor and draw the mismatch as a line between them — proximity and
   color do the noticing for you.
@@ -69,11 +70,11 @@ disagree) becomes the picture.
 values as `InventoryService`/`OrdersService`/`DataSeeder`, so the 3D view and
 the other two apps agree on first paint with nothing running.
 
-`VITE_SOURCE=live` polls `cs-console`'s new read-only feed
-(`GET /api/ops/orders` every 2.5s) for the CS plane. **The seller plane stays
-seed-backed in both modes** — the Angular app has no server and no wire
-protocol at all, so there's nothing to poll, and the HUD says so explicitly
-rather than pretending otherwise.
+`VITE_SOURCE=live` polls `cs-console`'s read-only feed (`GET /api/ops/orders`
+every 2.5s), which reads order-service with a read-only account, for the CS
+plane. **The seller plane stays seed-backed in both modes**: sellers and CS
+now share one order store, so a live seller plane would only mirror the CS
+plane. The HUD says so explicitly rather than pretending otherwise.
 
 ## Run
 
