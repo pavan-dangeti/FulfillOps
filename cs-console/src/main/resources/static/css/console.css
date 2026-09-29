@@ -31,6 +31,14 @@ a { color: var(--accent); }
 .brand small { font-weight: 400; color: var(--muted); font-size: 0.7rem; margin-left: 0.35rem; letter-spacing: 0.06em; }
 .nm a { color: var(--muted); text-decoration: none; margin-left: 1.1rem; font-weight: 500; }
 .nm a.active { color: var(--fg); border-bottom: 2px solid var(--accent); }
+.signout { margin-left: auto; }
+
+.login { max-width: 360px; margin: 4rem auto; padding: 1.6rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.login label { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem; color: var(--muted); font-size: 0.85rem; }
+.login input { padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
+.login .btn { width: 100%; }
+.notice { margin: 0 0 1rem; color: var(--muted); }
+.notice.error { color: var(--danger); }
 
 main { max-width: 1080px; margin: 0 auto; padding: 2rem 1.5rem; }
 

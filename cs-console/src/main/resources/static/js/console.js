@@ -2,6 +2,13 @@
 $(function () {
   'use strict';
 
+  var csrfHeader = $('meta[name="csrf-header"]').attr('content');
+  if (csrfHeader) {
+    var headers = {};
+    headers[csrfHeader] = $('meta[name="csrf-token"]').attr('content');
+    $.ajaxSetup({ headers: headers });
+  }
+
   var $search = $('#search');
 
   function closeModal() {

@@ -25,12 +25,17 @@ public class OrderController {
         return "redirect:/orders";
     }
 
+    @GetMapping("/login")
+    public String login() {
+        return "login";
+    }
+
     @GetMapping("/orders")
     public String orders(@RequestParam(value = "q", required = false) String q, Model model) {
         model.addAttribute("orders", service.search(q));
         model.addAttribute("q", q == null ? "" : q);
         model.addAttribute("pendingCount",
-                service.search(null).stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count());
+                service.search(null).stream().filter(o -> o.status() == OrderStatus.PENDING).count());
         return "orders";
     }
 

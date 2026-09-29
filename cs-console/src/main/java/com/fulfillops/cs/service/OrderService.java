@@ -1,55 +1,57 @@
 package com.fulfillops.cs.service;
 
 import com.fulfillops.cs.model.Order;
-import com.fulfillops.cs.model.OrderStatus;
-import com.fulfillops.cs.repository.OrderRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
 
+/**
+ * Order operations for the signed-in CS rep, delegated to order-service with
+ * the rep's own access token (added by the RestClient interceptor).
+ */
 @Service
-@Transactional
 public class OrderService {
 
-    private final OrderRepository repository;
+    private static final ParameterizedTypeReference<List<Order>> ORDER_LIST = new ParameterizedTypeReference<>() {
+    };
 
-    public OrderService(OrderRepository repository) {
-        this.repository = repository;
+    private final RestClient orderService;
+
+    public OrderService(RestClient orderService) {
+        this.orderService = orderService;
     }
 
-    @Transactional(readOnly = true)
     public List<Order> search(String query) {
-        if (query == null || query.isBlank()) {
-            return repository.findAll();
-        }
-        String q = query.trim();
-        return repository.findByOrderNumberContainingIgnoreCaseOrCustomerNameContainingIgnoreCase(q, q);
+        return orderService.get()
+                .uri(b -> b.path("/api/orders")
+                        .queryParamIfPresent("q", Optional.ofNullable(query).filter(q -> !q.isBlank()))
+                        .build())
+                .retrieve()
+                .body(ORDER_LIST);
     }
 
-    @Transactional(readOnly = true)
     public Order getByOrderNumber(String orderNumber) {
-        return repository.findByOrderNumber(orderNumber)
-                .orElseThrow(() -> new NoSuchElementException("Order not found: " + orderNumber));
+        try {
+            return orderService.get().uri("/api/orders/{n}", orderNumber).retrieve().body(Order.class);
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new NoSuchElementException("Order not found: " + orderNumber);
+        }
     }
 
     public Order refund(String orderNumber) {
-        Order order = getByOrderNumber(orderNumber);
-        if (order.getStatus() == OrderStatus.REFUNDED) {
-            return order;
-        }
-        order.refund(LocalDateTime.now());
-        return repository.save(order);
+        return orderService.post().uri("/api/orders/{n}/refund", orderNumber).retrieve().body(Order.class);
     }
 
+    /** A refunded order cannot ship; order-service answers 409 and the badge stays as it is. */
     public Order ship(String orderNumber) {
-        Order order = getByOrderNumber(orderNumber);
-        if (order.getStatus() != OrderStatus.REFUNDED) {
-            order.ship();
-            return repository.save(order);
+        try {
+            return orderService.post().uri("/api/orders/{n}/ship", orderNumber).retrieve().body(Order.class);
+        } catch (HttpClientErrorException.Conflict e) {
+            return getByOrderNumber(orderNumber);
         }
-        return order;
     }
 }
