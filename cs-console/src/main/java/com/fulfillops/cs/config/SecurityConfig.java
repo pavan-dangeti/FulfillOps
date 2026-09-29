@@ -36,7 +36,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    RestClient orderService(RestClient.Builder builder, @Value("${fulfillops.order-service-url}") String baseUrl) {
+    RestClient orderServiceClient(RestClient.Builder builder, @Value("${fulfillops.order-service-url}") String baseUrl) {
         return builder.baseUrl(baseUrl)
                 .requestInterceptor((request, body, execution) -> {
                     Authentication auth = SecurityContextHolder.getContext().getAuthentication();

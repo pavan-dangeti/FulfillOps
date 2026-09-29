@@ -56,7 +56,7 @@ class OrderServiceContractTest {
         var auth = UsernamePasswordAuthenticationToken.authenticated("cs", null, List.of());
         auth.setDetails(new SecurityConfig.AccessToken("token-from-login"));
         SecurityContextHolder.getContext().setAuthentication(auth);
-        return new OrderService(new SecurityConfig().orderService(RestClient.builder(), server.getUrl()));
+        return new OrderService(new SecurityConfig().orderServiceClient(RestClient.builder(), server.getUrl()));
     }
 
     @AfterEach
