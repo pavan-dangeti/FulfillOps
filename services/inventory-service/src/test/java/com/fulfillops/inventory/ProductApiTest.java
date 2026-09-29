@@ -19,7 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-@SpringBootTest(properties = "fulfillops.security.jwt-secret=test-secret-test-secret-test-secret-1234")
+@SpringBootTest(properties = "fulfillops.security.signer=true")
 @AutoConfigureMockMvc
 @Import(PostgresTestcontainer.class)
 class ProductApiTest {

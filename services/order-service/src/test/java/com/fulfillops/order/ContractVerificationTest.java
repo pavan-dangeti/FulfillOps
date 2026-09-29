@@ -27,7 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
 @Provider("order-service")
 @PactFolder("../../contracts/pacts")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "fulfillops.security.jwt-secret=test-secret-test-secret-test-secret-1234",
+        "fulfillops.security.signer=true",
         "SELLER_PASSWORD={noop}seller-password",
         "CS_PASSWORD={noop}cs-password"})
 @ActiveProfiles("demo")

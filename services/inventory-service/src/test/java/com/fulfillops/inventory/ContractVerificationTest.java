@@ -23,7 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 @Provider("inventory-service")
 @PactFolder("../../contracts/pacts")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "fulfillops.security.jwt-secret=test-secret-test-secret-test-secret-1234")
+        properties = "fulfillops.security.signer=true")
 @ActiveProfiles("demo")
 @Import(PostgresTestcontainer.class)
 class ContractVerificationTest {

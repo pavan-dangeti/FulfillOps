@@ -25,7 +25,7 @@ spring:
 
 fulfillops:
   security:
-    jwt-secret: ${JWT_SECRET:}
+    jwk-set-uri: ${JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
 
 management:
   endpoints:

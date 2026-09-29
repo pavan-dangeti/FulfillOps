@@ -23,7 +23,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@SpringBootTest(properties = "fulfillops.security.jwt-secret=test-secret-test-secret-test-secret-1234")
+@SpringBootTest(properties = "fulfillops.security.signer=true")
 @AutoConfigureMockMvc
 class PaymentsTest {
 

@@ -21,7 +21,6 @@ x-jvm-service: &jvm-service
 
 x-service-env: &service-env
   DB_URL: jdbc:postgresql://postgres:5432/fulfillops
-  JWT_SECRET: ${JWT_SECRET:?copy .env.example to .env}
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
 
 services:
@@ -63,10 +62,16 @@ services:
     <<: *jvm-service
     build: { context: ., args: { MODULE: services/inventory-service } }
     image: fulfillops/inventory-service:dev
+    depends_on: # verifies tokens against order-service's JWKS
+      postgres:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
     environment:
       <<: *service-env
       SERVER_PORT: 8082
       DB_USER: inventory_svc
+      JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
       DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?}
     ports: ["127.0.0.1:8082:8082"]
 
@@ -74,10 +79,16 @@ services:
     <<: *jvm-service
     build: { context: ., args: { MODULE: services/payment-service } }
     image: fulfillops/payment-service:dev
+    depends_on: # verifies tokens against order-service's JWKS
+      postgres:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
     environment:
       <<: *service-env
       SERVER_PORT: 8083
       DB_USER: payment_svc
+      JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
     ports: ["127.0.0.1:8083:8083"]
 
@@ -85,10 +96,16 @@ services:
     <<: *jvm-service
     build: { context: ., args: { MODULE: services/fulfilment-service } }
     image: fulfillops/fulfilment-service:dev
+    depends_on: # verifies tokens against order-service's JWKS
+      postgres:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
     environment:
       <<: *service-env
       SERVER_PORT: 8084
       DB_USER: fulfilment_svc
+      JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
       DB_PASSWORD: ${FULFILMENT_DB_PASSWORD:?}
     ports: ["127.0.0.1:8084:8084"]
 

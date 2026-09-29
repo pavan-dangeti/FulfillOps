@@ -3,7 +3,7 @@ package com.fulfillops.common;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -31,7 +31,7 @@ public class TokenIssuer {
                 .expiresAt(now.plus(TTL))
                 .claim("roles", roles)
                 .build();
-        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).build();
         return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 }

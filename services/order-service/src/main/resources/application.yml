@@ -25,7 +25,7 @@ spring:
 
 fulfillops:
   security:
-    jwt-secret: ${JWT_SECRET:}
+    signer: true # holds the RS256 key and publishes /.well-known/jwks.json
     public-paths: /api/auth/token
   auth:
     # A blank password disables the account.
