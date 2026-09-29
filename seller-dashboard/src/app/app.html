@@ -4,9 +4,13 @@
     <a routerLink="/orders" routerLinkActive="active">Orders</a>
     <a routerLink="/inventory" routerLinkActive="active">Inventory</a>
   </nav>
-  <button class="auth" data-testid="auth-toggle" (click)="toggleAuth()">
-    {{ auth.isSignedIn() ? 'Sign out' : 'Sign in' }}
-  </button>
+  @if (auth.demo) {
+    <span class="auth demo" data-testid="demo-badge" title="Offline demo data; nothing is saved">Demo data</span>
+  } @else if (auth.isSignedIn()) {
+    <button class="auth" data-testid="auth-toggle" (click)="signOut()">Sign out</button>
+  } @else {
+    <a class="auth" data-testid="auth-toggle" routerLink="/login">Sign in</a>
+  }
 </header>
 <main>
   <router-outlet />

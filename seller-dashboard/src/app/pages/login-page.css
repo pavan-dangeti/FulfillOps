@@ -1,0 +1,9 @@
+.login { max-width: 360px; margin: 3rem auto; padding: 1.6rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 0.4rem; }
+h1 { margin: 0; }
+.lede { color: var(--muted); margin: 0 0 0.8rem; }
+label { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
+input { padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
+button { margin-top: 1rem; padding: 0.6rem; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: default; }
+.err { color: var(--danger); margin: 0; }
+.hint { color: var(--muted); font-size: 0.8rem; margin: 0.8rem 0 0; }

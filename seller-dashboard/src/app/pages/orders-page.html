@@ -1,6 +1,10 @@
 <h1>Orders</h1>
 <p class="lede">Read-only visibility into recent orders across your catalog.</p>
 
+@if (error()) {
+  <p class="error-banner" role="alert">{{ error() }}</p>
+}
+
 <div class="table" role="table" aria-label="Orders">
   <div class="row head"><span>Order</span><span>Customer</span><span>SKU</span><span>Qty</span><span>Total</span><span>Status</span></div>
   @for (o of orders$ | async; track o.id) {

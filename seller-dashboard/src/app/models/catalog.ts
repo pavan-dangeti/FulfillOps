@@ -12,5 +12,5 @@ export interface Order {
   sku: string;
   quantity: number;
   total: number;
-  status: 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED';
+  status: 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'REFUNDED';
 }
