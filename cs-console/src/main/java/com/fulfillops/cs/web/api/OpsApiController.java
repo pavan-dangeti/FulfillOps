@@ -3,6 +3,7 @@ package com.fulfillops.cs.web.api;
 import com.fulfillops.cs.config.SecurityConfig;
 import com.fulfillops.cs.model.Order;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -30,6 +31,9 @@ public class OpsApiController {
     private final String password;
     private String token;
     private Instant tokenExpires = Instant.EPOCH;
+    private static final Duration CACHE_FOR = Duration.ofSeconds(2);
+    private List<OrderView> cached = List.of();
+    private Instant cachedUntil = Instant.EPOCH;
 
     public OpsApiController(RestClient orderService,
                             @Value("${fulfillops.ops-feed.username:ops}") String username,
@@ -39,14 +43,23 @@ public class OpsApiController {
         this.password = password;
     }
 
+    /**
+     * Public, so it carries no personal data (initials instead of names, no
+     * email) and is served from a 2-second cache: anonymous callers can't make
+     * the console hit order-service more than once per window.
+     */
     @GetMapping("/orders")
-    public List<OrderView> orders() {
-        List<Order> orders = orderService.get().uri("/api/orders")
-                .header("Authorization", "Bearer " + opsToken())
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<Order>>() {
-                });
-        return orders.stream().map(OrderView::from).toList();
+    public synchronized List<OrderView> orders() {
+        if (Instant.now().isAfter(cachedUntil)) {
+            List<Order> orders = orderService.get().uri("/api/orders")
+                    .header("Authorization", "Bearer " + opsToken())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<Order>>() {
+                    });
+            cached = orders.stream().map(OrderView::from).toList();
+            cachedUntil = Instant.now().plus(CACHE_FOR);
+        }
+        return cached;
     }
 
     @GetMapping("/health")
@@ -82,8 +95,16 @@ public class OpsApiController {
             OffsetDateTime refundedAt) {
 
         static OrderView from(Order o) {
-            return new OrderView(o.orderNumber(), o.customerName(), "", o.sku(), o.productName(), o.quantity(),
+            return new OrderView(o.orderNumber(), initials(o.customerName()), "", o.sku(), o.productName(), o.quantity(),
                     o.total(), o.status().name(), o.createdAt(), o.refundedAt());
+        }
+
+        /** "Priya Nair" -> "P. N." */
+        static String initials(String name) {
+            return java.util.Arrays.stream(name.trim().split("\\s+"))
+                    .filter(part -> !part.isEmpty())
+                    .map(part -> part.substring(0, 1).toUpperCase() + ".")
+                    .collect(java.util.stream.Collectors.joining(" "));
         }
     }
 }
