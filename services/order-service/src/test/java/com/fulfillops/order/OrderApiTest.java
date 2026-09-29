@@ -18,9 +18,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @SpringBootTest(properties = {
-        "fulfillops.security.jwt-secret=test-secret-test-secret-test-secret-1234",
+        "fulfillops.security.signer=true",
         "SELLER_PASSWORD={noop}seller-pw",
-        "CS_PASSWORD={noop}cs-pw"})
+        "CS_PASSWORD={noop}cs-pw",
+        "OPS_PASSWORD={noop}ops-pw"})
 @AutoConfigureMockMvc
 @ActiveProfiles("demo")
 @Import(PostgresTestcontainer.class)
@@ -49,6 +50,29 @@ class OrderApiTest {
             mvc.perform(post("/api/auth/token").contentType(MediaType.APPLICATION_JSON).content(json))
                     .andExpect(status().isUnauthorized());
         }
+    }
+
+    @Test
+    void repeatedWrongPasswordsLockTheAccountBriefly() throws Exception {
+        for (int i = 0; i < AuthController.FREE_ATTEMPTS; i++) {
+            mvc.perform(post("/api/auth/token").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"ops\",\"password\":\"guess-" + i + "\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+        // Even the right password is refused during the cool-down.
+        mvc.perform(post("/api/auth/token").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"ops\",\"password\":\"ops-pw\"}"))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void publishesOnlyThePublicSigningKey() throws Exception {
+        mvc.perform(get("/.well-known/jwks.json"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.keys[0].kty").value("RSA"))
+                .andExpect(jsonPath("$.keys[0].alg").value("RS256"))
+                .andExpect(jsonPath("$.keys[0].n").exists())
+                .andExpect(jsonPath("$.keys[0].d").doesNotExist());
     }
 
     @Test
