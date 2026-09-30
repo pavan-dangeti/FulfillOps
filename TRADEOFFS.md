@@ -100,3 +100,124 @@ explicitly. That feed is public and read-only, so it carries initials instead
 of customer names and no emails, and it is cached for two seconds so anonymous
 traffic cannot multiply load on order-service. It signs in to order-service
 with a dedicated read-only OPS account.
+
+## Messaging: Redpanda, and an outbox in front of it
+
+The order flow is a saga — hold stock, take money, claim a slot, confirm — and
+each step lives in a different service, so the steps have to be told to happen.
+Events go through Redpanda (Kafka API, single node, in `compose.yaml`).
+
+The outbox is the part that actually matters, and it is not a Redpanda feature:
+it is a table in the same Postgres transaction as the state change that caused
+the event. Publishing cannot join a database transaction, so a service that wrote
+its tables and *then* published has a window where the two disagree — a crash in
+between loses a command for work that did happen, or delivers one for work that
+was rolled back. Writing the event in the same transaction means the event exists
+if and only if the change does. `OutboxRelay` moves rows to the broker on a
+timer, which makes delivery at-least-once, which is why every consumer has to be
+idempotent rather than optional.
+
+- **Why a broker and not the outbox table alone?** The outbox could carry events
+  to consumers directly, with no broker at all. A broker was kept because
+  durability, consumer offsets and replay survive a consumer being down, and
+  because failing the *broker* is a failure case worth demonstrating.
+- **Why not RabbitMQ?** No log to replay from, and consumer offsets are a weaker
+  fit for an order system that has to be auditable after the fact.
+- **One topic, not one per message type.** Every event goes to `fulfillops` with
+  a `type` discriminator, keyed by order number. The key is what matters: the
+  broker then delivers one order's events in the order they were written, which is
+  what lets the saga assume its steps arrive in sequence. The cost is that each
+  service's consumer group reads every message and ignores the types it does not
+  own. Eight topics would remove that waste and add a provisioning step for no
+  correctness gain, so it stays as one.
+- **Known limit:** the relay is one thread making one blocking send per event, so
+  publication is bounded by batch size over the tick interval. More relay
+  instances are safe as they are — `FOR UPDATE SKIP LOCKED` keeps them off each
+  other's rows — but that is untested at scale.
+
+## Idempotency: an inbox table, claimed in the same transaction
+
+Every service has an `inbox` table keyed by the event id. `EventDispatcher` claims
+the id and runs the handler inside one transaction, so the effect and the record
+that it happened commit together. A redelivery loses the insert race and does
+nothing. This is the only idempotency mechanism; there is no second one.
+
+Tests drive events through `EventDispatcher` rather than calling handlers
+directly, with the broker switched off, so the claim and the state change are
+always exercised together. A test that called the handler twice would prove
+nothing about duplicate delivery.
+
+## The order's saga step is separate from its status
+
+`orders.status` is what a customer or a CS rep sees, and it keeps moving
+afterwards — an order is SHIPPED, then REFUNDED. `orders.saga_step` only ever
+moves forward, from `STARTED` through `RESERVED`, `PAID`, `ALLOCATED` to
+`CONFIRMED` or `FAILED`. It is what says whether stock and money are still
+involved, which is exactly what compensation needs to know and what `status`
+cannot tell it.
+
+Every transition returns whether the order actually moved, and a step that is not
+the expected one returns `false` instead of throwing. That is the defence
+against reordered messages: a confirmation that arrives early changes nothing,
+and a refusal that lands after the order is already confirmed cannot undo it.
+
+## Compensation: the service that did the work undoes it
+
+There is no orchestrator service. order-service records how far each order got,
+and when a step is refused it marks the order `FAILED` and broadcasts one
+`order.compensation.requested`. Each service that did work releases its own
+effect — inventory releases the reservation, payment refunds, fulfilment cancels
+the slot — and the ones that did nothing do nothing. A per-effect command
+(`release stock for ORD-x`) would need a service to know which effects exist;
+this way each service already has that and needs only the fact that the order is
+dead.
+
+For this to be safe, "undo" has to be keyed by the order, not by a counter.
+`reservations` is a table keyed by order number for that reason: releasing
+twice releases once, and a release that overtakes its reserve leaves a tombstone
+so the late reserve is refused instead of holding stock for a dead order.
+
+- **A refusal is an answer, not an exception.** `Allocations.allocate` returns
+  empty when there is no free slot rather than throwing. This is not a style
+  preference: an exception thrown from a nested `@Transactional` call marks the
+  *caller's* transaction rollback-only, and catching it there does not undo that.
+  The first version of this threw, and the result was a saga step that could not
+  record its own refusal — the inbox claim rolled back with it, so the message
+  was retried forever and the order sat at `PAID` holding the customer's money.
+  The same reasoning keeps a caller bug in `Payments.charge` (a charge for a
+  different amount) propagating loudly instead of being reported as a declined
+  card.
+
+## Reconciliation: facts catch up with intent
+
+`ReconciliationJob` compares each unsettled order against what its peers
+actually hold, and the direction of repair is the whole design. The order's
+`saga step` is the intent and a peer's record is the fact, so:
+
+- the fact is a step the order was always going to take (stock is held, money is
+  taken) and the order's record is behind — the order is **advanced** to match;
+- the order's record is ahead of a step that never happened — the command that
+  produces it is **recorded again**, which resumes a saga stalled on a message it
+  never received;
+- the order is `FAILED` and a peer still holds an effect — compensation is
+  **asked for again**.
+
+Failed orders are examined as well as in-flight ones. That is the whole reason
+the job exists for them: an order killed mid-compensation still has stock and
+money somewhere, and the first version of the query excluded exactly those.
+
+- **Known limits:** every order that is not confirmed is re-read on each pass,
+  including old failed ones, and an order that stays incomplete is re-announced
+  every pass. That is safe because every consumer is idempotent, but it is
+  unbounded work. A production version would record when compensation was last
+  requested and back off.
+
+## Pricing comes from the service that owns it
+
+An order's total is fetched from inventory at creation rather than accepted from
+the request, and inventory's reservation returns the unit price from the row it
+updated. The amount payment charges therefore originates in the service that owns
+the catalogue and cannot be set by a caller or by a tampered message. The order
+is still accepted when there is not enough stock, because rejecting it there would
+mean the concurrency test never exercised the reserve step that actually prevents
+overselling.
