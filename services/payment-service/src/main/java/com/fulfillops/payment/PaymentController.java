@@ -18,7 +18,7 @@ public class PaymentController {
     }
 
     @GetMapping("/{orderNumber}")
-    @PreAuthorize("hasRole('CS')")
+    @PreAuthorize("hasAnyRole('CS', 'INTERNAL')")
     public Payments.Payment get(@PathVariable String orderNumber) {
         return payments.get(orderNumber);
     }

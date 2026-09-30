@@ -26,22 +26,30 @@ public class Allocations {
         this.jdbc = jdbc;
     }
 
+    /**
+     * Returns empty when there is no free slot. Running out of capacity is an ordinary business
+     * answer, not a fault, and it is reported as one on purpose: throwing here would mark the
+     * caller's transaction rollback-only, so a saga step that reacts to the refusal could not
+     * record it.
+     */
     @Transactional
-    public Allocation allocate(String orderNumber, String sku, int quantity) {
+    public Optional<Allocation> allocate(String orderNumber, String sku, int quantity) {
         lock(orderNumber);
         Optional<Allocation> existing = find(orderNumber);
         if (existing.isPresent()) {
-            return existing.get();
+            return existing;
         }
-        String warehouse = takeSlot()
-                .orElseThrow(() -> new IllegalStateException("No fulfilment capacity for order " + orderNumber));
+        Optional<String> warehouse = takeSlot();
+        if (warehouse.isEmpty()) {
+            return Optional.empty();
+        }
         jdbc.sql("insert into allocations (order_number, sku, quantity, warehouse, status) values (:order, :sku, :qty, :wh, 'ALLOCATED')")
                 .param("order", orderNumber)
                 .param("sku", sku)
                 .param("qty", quantity)
-                .param("wh", warehouse)
+                .param("wh", warehouse.get())
                 .update();
-        return get(orderNumber);
+        return Optional.of(get(orderNumber));
     }
 
     /** Frees the slot. Cancelling twice, or before allocating, is safe. */
