@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -36,5 +37,16 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail badRequest(IllegalArgumentException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    /**
+     * A peer this service depends on could not be reached. That is the peer's outage, not a bug
+     * here, and it is not the caller's fault either — 503 says "the call is fine, try again", where
+     * 500 would tell them it was their problem and send them looking in the wrong place.
+     */
+    @ExceptionHandler(ResourceAccessException.class)
+    ProblemDetail peerUnavailable(ResourceAccessException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "A service this one depends on is not reachable");
     }
 }
