@@ -38,7 +38,7 @@ public class ProductController {
     }
 
     @GetMapping("/{sku}")
-    @PreAuthorize("hasAnyRole('SELLER', 'CS')")
+    @PreAuthorize("hasAnyRole('SELLER', 'CS', 'INTERNAL')")
     public ProductView get(@PathVariable String sku) {
         return ProductView.from(service.get(sku));
     }
