@@ -19,11 +19,26 @@ spring:
   flyway:
     schemas: order_svc
     default-schema: order_svc
+    # outbox/inbox live in common, so every service gets the same messaging tables
+    locations: classpath:db/migration,classpath:db/messaging
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: order-service
+      # A message the handler threw on is retried rather than dropped; at-least-once delivery
+      # plus the inbox is what makes that safe.
+      enable-auto-commit: false
+      auto-offset-reset: earliest
   mvc:
     problemdetails:
       enabled: true
 
 fulfillops:
+  # Peers are read for two things: the price of an order, and what reconciliation compares an
+  # order's own record against. Names follow the same env-var convention as JWK_SET_URI.
+  inventory-url: ${INVENTORY_URL:http://localhost:8082}
+  payment-url: ${PAYMENT_URL:http://localhost:8083}
+  fulfilment-url: ${FULFILMENT_URL:http://localhost:8084}
   security:
     signer: true # holds the RS256 key and publishes /.well-known/jwks.json
     public-paths: /api/auth/token
@@ -53,4 +68,4 @@ spring:
     activate:
       on-profile: demo
   flyway:
-    locations: classpath:db/migration,classpath:db/demo
+    locations: classpath:db/migration,classpath:db/messaging,classpath:db/demo
