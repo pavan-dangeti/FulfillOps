@@ -4,5 +4,7 @@ import { AuthService } from '../services/auth.service';
 
 export const signedInGuard: CanActivateFn = (_route, state) => {
   const auth = inject(AuthService);
-  return auth.isSignedIn() ? true : inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+  return auth.isSignedIn()
+    ? true
+    : inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };

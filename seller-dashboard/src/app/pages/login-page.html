@@ -7,7 +7,15 @@
   <label for="username">Username</label>
   <input id="username" formControlName="username" autocomplete="username" data-testid="username" />
   <label for="password">Password</label>
-  <input id="password" type="password" formControlName="password" autocomplete="current-password" data-testid="password" />
+  <input
+    id="password"
+    type="password"
+    formControlName="password"
+    autocomplete="current-password"
+    data-testid="password"
+  />
   <button type="submit" data-testid="sign-in" [disabled]="busy()">Sign in</button>
-  <p class="hint">No backend running? Open the app with <a href="/?demo=1">?demo=1</a> for offline demo data.</p>
+  <p class="hint">
+    No backend running? Open the app with <a href="/?demo=1">?demo=1</a> for offline demo data.
+  </p>
 </form>

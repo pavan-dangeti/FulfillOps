@@ -7,6 +7,8 @@ x-jvm-service: &jvm-service
   depends_on:
     postgres:
       condition: service_healthy
+    redpanda:
+      condition: service_healthy
   deploy:
     resources:
       limits:
@@ -21,9 +23,39 @@ x-jvm-service: &jvm-service
 
 x-service-env: &service-env
   DB_URL: jdbc:postgresql://postgres:5432/fulfillops
+  KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
 
 services:
+  redpanda:
+    # Kafka API, single node, no KRaft zoo to configure. Topic auto-creation is left on so the
+    # saga works on a fresh `docker compose up` with no provisioning step.
+    image: redpandadata/redpanda:v24.3.6
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=768M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:9092
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    healthcheck:
+      # A port check, not a cluster check: it passes slightly before Redpanda serves requests, and
+      # that is deliberate. The services connect with retries, so starting early costs a few
+      # warnings in the log, whereas a stricter check that never passes would hang the stack.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9092"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -53,6 +85,9 @@ services:
       SERVER_PORT: 8081
       DB_USER: order_svc
       DB_PASSWORD: ${ORDER_DB_PASSWORD:?}
+      INVENTORY_URL: http://inventory-service:8082
+      PAYMENT_URL: http://payment-service:8083
+      FULFILMENT_URL: http://fulfilment-service:8084
       SELLER_PASSWORD: ${SELLER_PASSWORD:-}
       CS_PASSWORD: ${CS_PASSWORD:-}
       OPS_PASSWORD: ${OPS_PASSWORD:-}
@@ -64,6 +99,8 @@ services:
     image: fulfillops/inventory-service:dev
     depends_on: # verifies tokens against order-service's JWKS
       postgres:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
       order-service:
         condition: service_healthy
@@ -82,6 +119,8 @@ services:
     depends_on: # verifies tokens against order-service's JWKS
       postgres:
         condition: service_healthy
+      redpanda:
+        condition: service_healthy
       order-service:
         condition: service_healthy
     environment:
@@ -98,6 +137,8 @@ services:
     image: fulfillops/fulfilment-service:dev
     depends_on: # verifies tokens against order-service's JWKS
       postgres:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
       order-service:
         condition: service_healthy

@@ -19,6 +19,16 @@ spring:
   flyway:
     schemas: inventory_svc
     default-schema: inventory_svc
+    # outbox/inbox live in common, so every service gets the same messaging tables
+    locations: classpath:db/migration,classpath:db/messaging
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: inventory-service
+      # A message the handler threw on is retried rather than dropped; at-least-once delivery
+      # plus the inbox is what makes that safe.
+      enable-auto-commit: false
+      auto-offset-reset: earliest
   mvc:
     problemdetails:
       enabled: true
@@ -39,4 +49,4 @@ spring:
     activate:
       on-profile: demo
   flyway:
-    locations: classpath:db/migration,classpath:db/demo
+    locations: classpath:db/migration,classpath:db/messaging,classpath:db/demo

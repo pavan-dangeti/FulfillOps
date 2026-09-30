@@ -3,6 +3,7 @@ package com.fulfillops.fulfilment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -45,8 +46,8 @@ class AllocationsTest {
 
     @Test
     void allocatingTwiceUsesOneSlot() {
-        var first = allocations.allocate("ORD-1", "SKU-1", 2);
-        var again = allocations.allocate("ORD-1", "SKU-1", 2);
+        var first = allocations.allocate("ORD-1", "SKU-1", 2).orElseThrow();
+        var again = allocations.allocate("ORD-1", "SKU-1", 2).orElseThrow();
         assertThat(again.warehouse()).isEqualTo(first.warehouse());
         assertThat(allocatedSlots()).isEqualTo(1);
     }
@@ -57,15 +58,13 @@ class AllocationsTest {
         int capacity = 5;
         try (var pool = Executors.newFixedThreadPool(16)) {
             var results = pool.invokeAll(IntStream.range(0, attempts)
-                    .mapToObj(i -> (Callable<Allocations.Allocation>) () -> allocations.allocate("ORD-C" + i, "SKU-1", 1))
+                    .mapToObj(i -> (Callable<Optional<Allocations.Allocation>>) () -> allocations.allocate("ORD-C" + i, "SKU-1", 1))
                     .toList());
             long ok = 0;
             for (var r : results) {
-                try {
-                    r.get();
+                // Running out of room is an empty result, not a failure.
+                if (r.get().isPresent()) {
                     ok++;
-                } catch (ExecutionException e) {
-                    assertThat(e.getCause()).isInstanceOf(IllegalStateException.class);
                 }
             }
             // Exactly: never over capacity, and no free slot wrongly refused.
@@ -88,7 +87,7 @@ class AllocationsTest {
     @Test
     void cancelBeforeAllocateWinsSoTheLateAllocateIsANoOp() {
         allocations.cancel("ORD-3");
-        var late = allocations.allocate("ORD-3", "SKU-1", 1);
+        var late = allocations.allocate("ORD-3", "SKU-1", 1).orElseThrow();
         assertThat(late.status()).isEqualTo("CANCELLED");
         assertThat(allocatedSlots()).isZero();
     }

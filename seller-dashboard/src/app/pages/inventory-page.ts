@@ -10,7 +10,7 @@ import { describeError } from '../services/errors';
   selector: 'app-inventory-page',
   imports: [AsyncPipe, ProductTable, ProductForm],
   templateUrl: './inventory-page.html',
-  styleUrl: './inventory-page.css'
+  styleUrl: './inventory-page.css',
 })
 export class InventoryPage implements OnInit {
   private readonly inventory = inject(InventoryService);

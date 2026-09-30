@@ -54,6 +54,19 @@ public class Payments {
         return get(orderNumber);
     }
 
+    /**
+     * Refunds only if there is a charge, and says so either way. Compensation can legitimately
+     * arrive before the charge does, so "nothing to refund" is an answer, not a failure.
+     */
+    @Transactional
+    public Optional<Payment> refundIfCharged(String orderNumber) {
+        Optional<Payment> payment = find(orderNumber);
+        if (payment.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(refund(orderNumber));
+    }
+
     public Payment get(String orderNumber) {
         return find(orderNumber).orElseThrow(() -> new NoSuchElementException("No payment for order " + orderNumber));
     }

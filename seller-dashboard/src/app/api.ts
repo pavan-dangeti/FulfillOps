@@ -8,5 +8,6 @@ export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', { factory
  * with no backend and no sign-in. Read once at startup.
  */
 export const DEMO_MODE = new InjectionToken<boolean>('DEMO_MODE', {
-  factory: () => typeof location !== 'undefined' && new URLSearchParams(location.search).get('demo') === '1'
+  factory: () =>
+    typeof location !== 'undefined' && new URLSearchParams(location.search).get('demo') === '1',
 });

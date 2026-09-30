@@ -18,7 +18,7 @@ public class AllocationController {
     }
 
     @GetMapping("/{orderNumber}")
-    @PreAuthorize("hasRole('CS')")
+    @PreAuthorize("hasAnyRole('CS', 'INTERNAL')")
     public Allocations.Allocation get(@PathVariable String orderNumber) {
         return allocations.get(orderNumber);
     }

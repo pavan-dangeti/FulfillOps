@@ -9,14 +9,14 @@ const STATUS_CLASS: Record<Order['status'], string> = {
   PROCESSING: 'badge processing',
   SHIPPED: 'badge shipped',
   DELIVERED: 'badge delivered',
-  REFUNDED: 'badge refunded'
+  REFUNDED: 'badge refunded',
 };
 
 @Component({
   selector: 'app-orders-page',
   imports: [AsyncPipe, CurrencyPipe],
   templateUrl: './orders-page.html',
-  styleUrl: './orders-page.css'
+  styleUrl: './orders-page.css',
 })
 export class OrdersPage implements OnInit {
   private readonly orders = inject(OrdersService);

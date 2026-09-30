@@ -11,7 +11,7 @@ const SEED: Product[] = [
   { id: 'SKU-1002', sku: 'SKU-1002', name: 'Mechanical Keyboard', unitPrice: 89.5, stock: 56 },
   { id: 'SKU-1003', sku: 'SKU-1003', name: 'USB-C Hub 7-in-1', unitPrice: 45.0, stock: 8 },
   { id: 'SKU-1004', sku: 'SKU-1004', name: '4K Webcam', unitPrice: 129.99, stock: 23 },
-  { id: 'SKU-1005', sku: 'SKU-1005', name: 'Standing Desk Mat', unitPrice: 39.75, stock: 0 }
+  { id: 'SKU-1005', sku: 'SKU-1005', name: 'Standing Desk Mat', unitPrice: 39.75, stock: 0 },
 ];
 
 /**
@@ -45,7 +45,9 @@ export class InventoryService {
       this.products.next([...this.products.getValue(), { ...product, id: product.sku }]);
       return;
     }
-    const created = await firstValueFrom(this.http.post<Product>(`${this.base}/api/products`, product));
+    const created = await firstValueFrom(
+      this.http.post<Product>(`${this.base}/api/products`, product),
+    );
     this.products.next([...this.products.getValue(), created]);
   }
 
@@ -53,13 +55,17 @@ export class InventoryService {
     const saved = this.demo
       ? { ...this.products.getValue().find((p) => p.id === id)!, stock }
       : await firstValueFrom(
-          this.http.put<Product>(`${this.base}/api/products/${encodeURIComponent(id)}/stock`, { stock })
+          this.http.put<Product>(`${this.base}/api/products/${encodeURIComponent(id)}/stock`, {
+            stock,
+          }),
         );
     this.products.next(this.products.getValue().map((p) => (p.id === id ? saved : p)));
   }
 
   /** Client-side hint for the form; the server's unique index is the real guarantee. */
   hasSku(sku: string): boolean {
-    return this.products.getValue().some((p) => p.sku.trim().toUpperCase() === sku.trim().toUpperCase());
+    return this.products
+      .getValue()
+      .some((p) => p.sku.trim().toUpperCase() === sku.trim().toUpperCase());
   }
 }

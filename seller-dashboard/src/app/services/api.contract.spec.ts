@@ -16,8 +16,18 @@ import { OrdersService } from './orders.service';
 const { eachLike, like, regex, integer, decimal } = MatchersV3;
 
 const dir = path.resolve(process.cwd(), '../contracts/pacts');
-const orderService = new PactV4({ consumer: 'seller-dashboard', provider: 'order-service', dir, logLevel: 'warn' });
-const inventoryService = new PactV4({ consumer: 'seller-dashboard', provider: 'inventory-service', dir, logLevel: 'warn' });
+const orderService = new PactV4({
+  consumer: 'seller-dashboard',
+  provider: 'order-service',
+  dir,
+  logLevel: 'warn',
+});
+const inventoryService = new PactV4({
+  consumer: 'seller-dashboard',
+  provider: 'inventory-service',
+  dir,
+  logLevel: 'warn',
+});
 
 const BEARER = { Authorization: regex('^Bearer .+$', 'Bearer token') };
 
@@ -30,8 +40,10 @@ function configure(baseUrl: string, signedIn: boolean): void {
       provideRouter([]),
       { provide: API_BASE_URL, useValue: baseUrl },
       { provide: DEMO_MODE, useValue: false },
-      ...(signedIn ? [{ provide: AuthService, useValue: { token: () => 'token', signOut: () => undefined } }] : [])
-    ]
+      ...(signedIn
+        ? [{ provide: AuthService, useValue: { token: () => 'token', signOut: () => undefined } }]
+        : []),
+    ],
   });
 }
 
@@ -40,7 +52,7 @@ const product = (sku: string, stock: number) => ({
   sku: like(sku),
   name: like('Wireless Mouse'),
   unitPrice: decimal(24.99),
-  stock: integer(stock)
+  stock: integer(stock),
 });
 
 describe('seller-dashboard -> order-service', () => {
@@ -49,8 +61,12 @@ describe('seller-dashboard -> order-service', () => {
       .addInteraction()
       .given('account seller with password seller-password and role SELLER')
       .uponReceiving('a seller signs in')
-      .withRequest('POST', '/api/auth/token', (b) => b.jsonBody({ username: 'seller', password: 'seller-password' }))
-      .willRespondWith(200, (b) => b.jsonBody({ accessToken: like('eyJhbGciOiJIUzI1NiJ9.e30.sig'), roles: ['SELLER'] }))
+      .withRequest('POST', '/api/auth/token', (b) =>
+        b.jsonBody({ username: 'seller', password: 'seller-password' }),
+      )
+      .willRespondWith(200, (b) =>
+        b.jsonBody({ accessToken: like('eyJhbGciOiJIUzI1NiJ9.e30.sig'), roles: ['SELLER'] }),
+      )
       .executeTest(async (server) => {
         configure(server.url, false);
         const auth = TestBed.inject(AuthService);
@@ -63,7 +79,9 @@ describe('seller-dashboard -> order-service', () => {
       .addInteraction()
       .given('account seller with password seller-password and role SELLER')
       .uponReceiving('a seller sign-in with the wrong password')
-      .withRequest('POST', '/api/auth/token', (b) => b.jsonBody({ username: 'seller', password: 'wrong' }))
+      .withRequest('POST', '/api/auth/token', (b) =>
+        b.jsonBody({ username: 'seller', password: 'wrong' }),
+      )
       .willRespondWith(401)
       .executeTest(async (server) => {
         configure(server.url, false);
@@ -86,9 +104,9 @@ describe('seller-dashboard -> order-service', () => {
             sku: like('SKU-1003'),
             quantity: integer(2),
             total: decimal(90.0),
-            status: regex('^(PENDING|PROCESSING|SHIPPED|DELIVERED|REFUNDED)$', 'PENDING')
-          })
-        )
+            status: regex('^(PENDING|PROCESSING|SHIPPED|DELIVERED|REFUNDED)$', 'PENDING'),
+          }),
+        ),
       )
       .executeTest(async (server) => {
         configure(server.url, true);
@@ -120,10 +138,18 @@ describe('seller-dashboard -> inventory-service', () => {
       .given('no product SKU-TEST-1 exists')
       .uponReceiving('a request to add product SKU-TEST-1')
       .withRequest('POST', '/api/products', (b) =>
-        b.headers(BEARER).jsonBody({ sku: 'SKU-TEST-1', name: 'Test Lamp', unitPrice: 12.5, stock: 9 })
+        b
+          .headers(BEARER)
+          .jsonBody({ sku: 'SKU-TEST-1', name: 'Test Lamp', unitPrice: 12.5, stock: 9 }),
       )
       .willRespondWith(201, (b) =>
-        b.jsonBody({ id: 'SKU-TEST-1', sku: 'SKU-TEST-1', name: 'Test Lamp', unitPrice: decimal(12.5), stock: 9 })
+        b.jsonBody({
+          id: 'SKU-TEST-1',
+          sku: 'SKU-TEST-1',
+          name: 'Test Lamp',
+          unitPrice: decimal(12.5),
+          stock: 9,
+        }),
       )
       .executeTest(async (server) => {
         configure(server.url, true);
@@ -138,14 +164,16 @@ describe('seller-dashboard -> inventory-service', () => {
       .given('product SKU-1001 exists with 142 units on hand')
       .uponReceiving('a request to add a SKU that already exists')
       .withRequest('POST', '/api/products', (b) =>
-        b.headers(BEARER).jsonBody({ sku: 'SKU-1001', name: 'Another Mouse', unitPrice: 20, stock: 1 })
+        b
+          .headers(BEARER)
+          .jsonBody({ sku: 'SKU-1001', name: 'Another Mouse', unitPrice: 20, stock: 1 }),
       )
       .willRespondWith(409)
       .executeTest(async (server) => {
         configure(server.url, true);
         const inventory = TestBed.inject(InventoryService);
         await expect(
-          inventory.add({ sku: 'SKU-1001', name: 'Another Mouse', unitPrice: 20, stock: 1 })
+          inventory.add({ sku: 'SKU-1001', name: 'Another Mouse', unitPrice: 20, stock: 1 }),
         ).rejects.toMatchObject({ status: 409 });
       }));
 
@@ -154,7 +182,9 @@ describe('seller-dashboard -> inventory-service', () => {
       .addInteraction()
       .given('product SKU-1001 exists with 142 units on hand')
       .uponReceiving('a stock update for SKU-1001')
-      .withRequest('PUT', '/api/products/SKU-1001/stock', (b) => b.headers(BEARER).jsonBody({ stock: 33 }))
+      .withRequest('PUT', '/api/products/SKU-1001/stock', (b) =>
+        b.headers(BEARER).jsonBody({ stock: 33 }),
+      )
       .willRespondWith(200, (b) => b.jsonBody({ ...product('SKU-1001', 33), stock: 33 }))
       .executeTest(async (server) => {
         configure(server.url, true);

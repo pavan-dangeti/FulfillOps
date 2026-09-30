@@ -1,1 +1,2 @@
 com.fulfillops.common.ServiceSecurityAutoConfiguration
+com.fulfillops.common.MessagingAutoConfiguration
