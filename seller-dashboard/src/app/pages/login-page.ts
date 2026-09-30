@@ -9,7 +9,7 @@ import { describeError } from '../services/errors';
   selector: 'app-login-page',
   imports: [ReactiveFormsModule],
   templateUrl: './login-page.html',
-  styleUrl: './login-page.css'
+  styleUrl: './login-page.css',
 })
 export class LoginPage {
   private readonly auth = inject(AuthService);
@@ -18,7 +18,7 @@ export class LoginPage {
 
   readonly form = new FormGroup({
     username: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    password: new FormControl('', { nonNullable: true, validators: [Validators.required] })
+    password: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
   readonly error = signal<string | null>(null);
   readonly busy = signal(false);
@@ -35,7 +35,11 @@ export class LoginPage {
       await this.auth.signIn(username, password);
       await this.router.navigateByUrl(this.safeReturnUrl());
     } catch (e) {
-      this.error.set(e instanceof HttpErrorResponse && e.status === 401 ? 'Invalid username or password' : describeError(e));
+      this.error.set(
+        e instanceof HttpErrorResponse && e.status === 401
+          ? 'Invalid username or password'
+          : describeError(e),
+      );
     } finally {
       this.busy.set(false);
     }

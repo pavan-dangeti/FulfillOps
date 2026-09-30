@@ -8,7 +8,7 @@ import { uniqueSku } from '../validators/unique-sku.validator';
   selector: 'app-product-form',
   imports: [ReactiveFormsModule],
   templateUrl: './product-form.html',
-  styleUrl: './product-form.css'
+  styleUrl: './product-form.css',
 })
 export class ProductForm {
   @Output() readonly addProduct = new EventEmitter<Omit<Product, 'id'>>();
@@ -17,11 +17,11 @@ export class ProductForm {
 
   readonly form = new FormGroup({
     sku: new FormControl('', {
-      validators: [Validators.required, uniqueSku((sku) => this.inventory.hasSku(sku))]
+      validators: [Validators.required, uniqueSku((sku) => this.inventory.hasSku(sku))],
     }),
     name: new FormControl('', [Validators.required]),
     unitPrice: new FormControl<number | null>(null, [Validators.required, Validators.min(0)]),
-    stock: new FormControl<number | null>(null, [Validators.required, Validators.min(0)])
+    stock: new FormControl<number | null>(null, [Validators.required, Validators.min(0)]),
   });
 
   submit(): void {
@@ -34,7 +34,7 @@ export class ProductForm {
       sku: sku!.trim(),
       name: name!.trim(),
       unitPrice: Number(unitPrice),
-      stock: Number(stock)
+      stock: Number(stock),
     });
     this.form.reset();
   }

@@ -6,7 +6,7 @@ import { Product } from '../models/catalog';
   selector: 'app-product-table',
   imports: [CurrencyPipe],
   templateUrl: './product-table.html',
-  styleUrl: './product-table.css'
+  styleUrl: './product-table.css',
 })
 export class ProductTable {
   @Input({ required: true }) products: Product[] = [];

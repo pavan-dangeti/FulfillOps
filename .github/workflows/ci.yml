@@ -44,6 +44,7 @@ jobs:
         working-directory: seller-dashboard
         run: |
           npm ci
+          npm run format:check
           npx ng build
           npx ng test --watch=false
       - name: Ops floor

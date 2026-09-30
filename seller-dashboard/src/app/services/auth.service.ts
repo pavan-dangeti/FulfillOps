@@ -27,7 +27,7 @@ export class AuthService {
   /** Rejects if the credentials are wrong or the account is not a seller. */
   async signIn(username: string, password: string): Promise<void> {
     const res = await firstValueFrom(
-      this.http.post<TokenResponse>(`${this.base}/api/auth/token`, { username, password })
+      this.http.post<TokenResponse>(`${this.base}/api/auth/token`, { username, password }),
     );
     if (!res.roles.includes('SELLER')) {
       throw new Error('This account is not a seller account');
