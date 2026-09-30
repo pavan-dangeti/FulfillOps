@@ -2,8 +2,7 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-export const inventoryAccessGuard: CanActivateFn = () => {
+export const signedInGuard: CanActivateFn = (_route, state) => {
   const auth = inject(AuthService);
-  const router = inject(Router);
-  return auth.isSignedIn() ? true : router.createUrlTree(['/orders']);
+  return auth.isSignedIn() ? true : inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };

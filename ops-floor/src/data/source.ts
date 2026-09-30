@@ -1,6 +1,6 @@
-// Data types shared by every source. Field names mirror the two real stores:
-// the Angular seller dashboard (BehaviorSubject, in memory) and the Spring
-// cs-console (JPA + H2). This file does not invent domain concepts.
+// Data types shared by every source. Field names mirror the seller dashboard's
+// order model and order-service's order view (as served by cs-console's
+// /api/ops feed). This file does not invent domain concepts.
 
 export type SellerStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED';
 export type CsStatus = SellerStatus | 'REFUNDED';

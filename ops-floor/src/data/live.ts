@@ -1,7 +1,7 @@
-// LiveSource — polls the new JSON endpoints on cs-console (GET /api/ops/orders,
-// GET /api/ops/health). The Angular seller dashboard has no server and no wire
-// protocol, so in live mode the seller plane stays seed-backed; the HUD says so
-// explicitly. No seller API is faked here.
+// LiveSource — polls cs-console's read-only feed (GET /api/ops/orders,
+// GET /api/ops/health), which reads order-service. Sellers and CS now share one
+// order store, so a live seller plane would only mirror the CS plane; in live
+// mode the seller plane stays seed-backed and the HUD says so explicitly.
 import { SeedSource } from './seed';
 import type { CsOrder, CsStatus, LogEntry } from './source';
 

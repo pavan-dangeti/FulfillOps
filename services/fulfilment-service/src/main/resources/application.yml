@@ -1,0 +1,42 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: fulfilment-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fulfillops}
+    username: ${DB_USER:fulfilment_svc}
+    password: ${DB_PASSWORD:}
+    hikari:
+      schema: fulfilment_svc # search_path for every pooled connection, so plain SQL finds this service's tables
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: fulfilment_svc
+  flyway:
+    schemas: fulfilment_svc
+    default-schema: fulfilment_svc
+  mvc:
+    problemdetails:
+      enabled: true
+
+fulfillops:
+  security:
+    jwk-set-uri: ${JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo

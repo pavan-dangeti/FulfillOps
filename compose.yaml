@@ -1,0 +1,126 @@
+# Local stack: `cp .env.example .env && docker compose up --build --wait`
+# App ports bind to 127.0.0.1 only; Postgres is reachable only from inside the compose network.
+name: fulfillops
+
+x-jvm-service: &jvm-service
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+  deploy:
+    resources:
+      limits:
+        memory: 512m
+  healthcheck:
+    # bash's /dev/tcp instead of curl, which the JRE image doesn't guarantee
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/$$SERVER_PORT && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+    interval: 5s
+    timeout: 3s
+    retries: 30
+    start_period: 20s
+
+x-service-env: &service-env
+  DB_URL: jdbc:postgresql://postgres:5432/fulfillops
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fulfillops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.example to .env}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
+      FULFILMENT_DB_PASSWORD: ${FULFILMENT_DB_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "fulfillops"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  order-service:
+    <<: *jvm-service
+    build: { context: ., args: { MODULE: services/order-service } }
+    image: fulfillops/order-service:dev
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8081
+      DB_USER: order_svc
+      DB_PASSWORD: ${ORDER_DB_PASSWORD:?}
+      SELLER_PASSWORD: ${SELLER_PASSWORD:-}
+      CS_PASSWORD: ${CS_PASSWORD:-}
+      OPS_PASSWORD: ${OPS_PASSWORD:-}
+    ports: ["127.0.0.1:8081:8081"]
+
+  inventory-service:
+    <<: *jvm-service
+    build: { context: ., args: { MODULE: services/inventory-service } }
+    image: fulfillops/inventory-service:dev
+    depends_on: # verifies tokens against order-service's JWKS
+      postgres:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8082
+      DB_USER: inventory_svc
+      JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
+      DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?}
+    ports: ["127.0.0.1:8082:8082"]
+
+  payment-service:
+    <<: *jvm-service
+    build: { context: ., args: { MODULE: services/payment-service } }
+    image: fulfillops/payment-service:dev
+    depends_on: # verifies tokens against order-service's JWKS
+      postgres:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8083
+      DB_USER: payment_svc
+      JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
+      DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
+    ports: ["127.0.0.1:8083:8083"]
+
+  fulfilment-service:
+    <<: *jvm-service
+    build: { context: ., args: { MODULE: services/fulfilment-service } }
+    image: fulfillops/fulfilment-service:dev
+    depends_on: # verifies tokens against order-service's JWKS
+      postgres:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8084
+      DB_USER: fulfilment_svc
+      JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
+      DB_PASSWORD: ${FULFILMENT_DB_PASSWORD:?}
+    ports: ["127.0.0.1:8084:8084"]
+
+  cs-console:
+    <<: *jvm-service
+    build: { context: ., args: { MODULE: cs-console } }
+    image: fulfillops/cs-console:dev
+    depends_on:
+      order-service:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      ORDER_SERVICE_URL: http://order-service:8081
+      OPS_FEED_PASSWORD: ${OPS_FEED_PASSWORD:-}
+    ports: ["127.0.0.1:8080:8080"]
+
+volumes:
+  pgdata:

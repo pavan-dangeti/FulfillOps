@@ -7,4 +7,6 @@ nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
 nav a.active { color: var(--fg); border-bottom: 2px solid var(--accent); }
 .auth { margin-left: auto; padding: 0.45rem 0.9rem; border: 1px solid var(--line); background: var(--panel); color: inherit; border-radius: 6px; cursor: pointer; font: inherit; }
 .auth:hover { border-color: var(--accent); }
+a.auth { text-decoration: none; }
+.auth.demo { cursor: default; color: var(--warn-fg); border-color: var(--warn-fg); }
 main { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }

@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './services/auth.service';
 
 @Component({
@@ -10,8 +10,10 @@ import { AuthService } from './services/auth.service';
 })
 export class App {
   protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
 
-  toggleAuth(): void {
-    this.auth.isSignedIn() ? this.auth.signOut() : this.auth.signIn();
+  signOut(): void {
+    this.auth.signOut();
+    void this.router.navigate(['/login']);
   }
 }

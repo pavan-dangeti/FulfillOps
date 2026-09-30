@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# One command: ensure JDK on PATH, then run the full E2E suite.
-# Playwright's webServer boots both services itself (see e2e-tests/playwright.config.ts).
+# One command: install the e2e dependencies and run the full suite.
+# global-setup.ts builds and starts the compose stack on a fresh database, and
+# Playwright's webServer starts the two frontends (see e2e-tests/playwright.config.ts).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-if [ -z "${JAVA_HOME:-}" ] && [ -x /opt/homebrew/opt/openjdk@21/bin/java ]; then
-  export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-fi
 
 cd "$ROOT/e2e-tests"
 npm install --silent

@@ -1,5 +1,9 @@
 <h1>Inventory</h1>
-<p class="lede">Control stock levels across your catalog. Edits are reflected live in the shared state stream.</p>
+<p class="lede">Control stock levels across your catalog. Every change is saved to the inventory service before it shows here.</p>
+
+@if (error()) {
+  <p class="error-banner" role="alert" data-testid="inventory-error">{{ error() }}</p>
+}
 
 <div class="stats">
   <div class="card"><span class="k">Total units</span><span class="v">{{ totalUnits$ | async }}</span></div>

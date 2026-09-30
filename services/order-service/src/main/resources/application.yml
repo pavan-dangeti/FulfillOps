@@ -1,0 +1,56 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fulfillops}
+    username: ${DB_USER:order_svc}
+    password: ${DB_PASSWORD:}
+    hikari:
+      schema: order_svc # search_path for every pooled connection, so plain SQL finds this service's tables
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: order_svc
+  flyway:
+    schemas: order_svc
+    default-schema: order_svc
+  mvc:
+    problemdetails:
+      enabled: true
+
+fulfillops:
+  security:
+    signer: true # holds the RS256 key and publishes /.well-known/jwks.json
+    public-paths: /api/auth/token
+  auth:
+    # A blank password disables the account.
+    users:
+      - username: seller
+        password: ${SELLER_PASSWORD:}
+        roles: [SELLER]
+      - username: cs
+        password: ${CS_PASSWORD:}
+        roles: [CS]
+      # read-only feed account (no customer emails) used by the CS console's ops feed
+      - username: ops
+        password: ${OPS_PASSWORD:}
+        roles: [OPS]
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo
