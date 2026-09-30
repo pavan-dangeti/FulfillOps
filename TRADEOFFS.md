@@ -221,3 +221,36 @@ the catalogue and cannot be set by a caller or by a tampered message. The order
 is still accepted when there is not enough stock, because rejecting it there would
 mean the concurrency test never exercised the reserve step that actually prevents
 overselling.
+
+## Why fulfilment capacity is a migration, not demo data
+
+Warehouse capacity used to be seeded by the `demo` profile alone. A deployment started without that
+profile could therefore accept orders, take payment for them, discover there was no slot to
+allocate, and have to refund every one — a system that only works when dressed up for a demo. The
+ordering harness caught it by running against a clean stack and confirming zero orders.
+
+Capacity is operational configuration, so it now ships in a normal migration. The simplification
+is that the numbers are fixed in SQL rather than read from configuration; a real deployment would
+set them per warehouse.
+
+**Related:** nothing decrements `on_hand` when an order ships. A shipped order still counts as
+holding its reservation. That is why the oversell invariant in `scripts/invariants.sql` is stated
+per order — "this confirmed order held its stock" — rather than as a running total of confirmed
+demand against current `on_hand`, which would be a false statement about a system whose stock
+legitimately moves.
+
+## A peer being down is 503, not 500
+
+order-service reads inventory to price an order, so inventory being down fails the request. That
+was answering 500, which tells the caller *they* did something wrong and sends them looking in the
+wrong place. `ApiErrors` maps `ResourceAccessException` to 503: the call was fine, the dependency is
+not up. Found by the failure-injection suite, which killed inventory mid-burst.
+
+## One topic, and every service reading all of it
+
+Each service's consumer group subscribes to the single `fulfillops` topic and discards the types it
+does not own. That is wasted work at scale and it is deliberate here: with one topic, re-publishing
+an event to test a duplicate is one `update` against the outbox, and the broker's per-key ordering
+is what lets the saga assume its steps arrive in sequence. Splitting into a topic per type would buy
+a little efficiency and cost a provisioning step, and would make the failure tests harder to write.
+The trade is recorded rather than hidden.
