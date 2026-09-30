@@ -79,16 +79,21 @@ developer-machine run, and the command is the same.
 |---|---|
 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected, zero oversold** | `./scripts/ordering-harness.py storm --orders 1000 --units 100 --concurrency 100` |
 | All 9 invariants hold over the whole database afterwards | `./scripts/ordering-harness.py check` |
-| 1,000 orders placed in ~2.2 s at 100 concurrent clients (~450 orders/s) | same storm run, reported in its output |
+| **The same, on a different machine: 100 confirmed, 900 failed** | the `invariants` CI job (ubuntu-latest) |
+| 1,000 orders placed in 2.1 s at 100 concurrent clients (~450/s) | same storm run, reported in its output |
+| 1,000 orders placed in 9.0 s at 100 concurrent clients (~111/s) | same storm run on the CI runner |
 | 300 orders race for 100 units in-process → exactly 100 reservations | `./mvnw -pl services/inventory-service -Dtest=ReservationsTest test` |
 | A duplicated message produces one effect and one inbox row | `./mvnw -pl services/order-service -Dtest=OrderSagaFlowTest test` |
 | Every reconciliation repair direction (8 cases) | `./mvnw -pl services/order-service -Dtest=ReconciliationJobTest test` |
 
-The placement rate is an observation, not a benchmark. It is measured on a laptop with the client
-and all four services sharing the same machine, so it says nothing about production throughput. The
-`inventory` service is the bottleneck by design: every order's reserve step contends on one product
-row, which is the point being tested. A real capacity number needs `docs/design.md`'s load-test
-method and stated hardware.
+**The correctness result is the same on both machines; the rate is not** — ~450/s on an Apple
+Silicon laptop sharing the machine with all four services, ~111/s on a CI runner. That gap is the
+useful part: the guarantee does not depend on the hardware, and the throughput is a property of the
+machine rather than of the design. Both runs confirmed exactly 100 units.
+
+The placement rate is an observation, not a benchmark. The `inventory` service is the bottleneck by
+design: every order's reserve step contends on one product row, which is the point being tested. A
+real capacity number needs a load-test method and stated hardware, which is the next phase.
 
 ### Failure injection
 
