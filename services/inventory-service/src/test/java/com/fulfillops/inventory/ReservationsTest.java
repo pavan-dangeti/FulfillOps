@@ -132,4 +132,61 @@ class ReservationsTest {
                 .update())
                 .hasMessageContaining("reserved_within_on_hand");
     }
+
+    /**
+     * The baseline the safeguard is measured against: the obvious implementation.
+     *
+     * <p>Read the counter, decide there is room, write it back. This is what the reserve step looks
+     * like before the conditional UPDATE, and it oversells — not by a little. Every thread reads the
+     * same "reserved" value, decides it is fine, and writes it, so the final counter is whichever
+     * write landed last rather than the number of units actually held.
+     *
+     * <p>Kept as a test rather than a comment so the number is measured rather than asserted from
+     * memory, and so it cannot rot into a claim that no longer matches the code.
+     */
+    @Test
+    void theObviousImplementationOversells() throws Exception {
+        // More contenders than units, or the naive version cannot oversell and the baseline would
+        // prove nothing — 60 orders for 100 units is a case where both versions behave.
+        int contenders = 300;
+        ExecutorService pool = Executors.newFixedThreadPool(16);
+        try {
+            List<Callable<Boolean>> naive = IntStream.range(0, contenders)
+                    .<Callable<Boolean>>mapToObj(i -> () -> {
+                        int held = jdbc.sql("select reserved from products where sku = 'SKU-1001'")
+                                .query(Integer.class).single();
+                        if (held >= ON_HAND) {
+                            return false;
+                        }
+                        jdbc.sql("update products set reserved = :n where sku = 'SKU-1001'")
+                                .param("n", held + 1).update();
+                        return true;
+                    })
+                    .toList();
+            long granted = pool.invokeAll(naive).stream()
+                    .map(future -> {
+                        try {
+                            return future.get();
+                        } catch (Exception e) {
+                            throw new IllegalStateException(e);
+                        }
+                    })
+                    .filter(Boolean::booleanValue)
+                    .count();
+            long ledger = jdbc.sql("select count(*) from reservations").query(Long.class).single();
+
+            // Printed so the baseline figure is measured on every run rather than remembered.
+            System.out.printf("baseline check-then-write: %d of %d contenders were told yes for %d units%n",
+                    granted, contenders, ON_HAND);
+            // The point of the comparison: threads agreed they had reserved units that nobody has.
+            assertThat(granted)
+                    .as("check-then-write must oversell, or this baseline proves nothing")
+                    .isGreaterThan(ON_HAND);
+            assertThat(ledger)
+                    .as("no per-order ledger exists in the naive version, so the counter is the only record")
+                    .isZero();
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }
