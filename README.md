@@ -2,147 +2,253 @@
 
 # 📦 FulfillOps
 
-**Multi-Stack Fulfillment & Seller Operations Platform**
+**A distributed order system that promises stock is never oversold — and proves it.**
 
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](./LICENSE)
 [![CI](https://github.com/pavan-dangeti/FulfillOps/actions/workflows/ci.yml/badge.svg)](https://github.com/pavan-dangeti/FulfillOps/actions/workflows/ci.yml)
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Ops_Floor-black?style=for-the-badge&logo=vercel&logoColor=white)](https://fulfill-ops.vercel.app)
 
-![Angular](https://img.shields.io/badge/Angular_21-DD0031?style=flat-square&logo=angular&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot_4-6DB33F?style=flat-square&logo=spring&logoColor=white)
-![Java](https://img.shields.io/badge/Java_21-007396?style=flat-square&logo=openjdk&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL_17-4169E1?style=flat-square&logo=postgresql&logoColor=white)
-![Thymeleaf](https://img.shields.io/badge/Thymeleaf-005F0F?style=flat-square&logo=thymeleaf&logoColor=white)
-![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat-square&logo=three.js&logoColor=white)
-![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)
-![Pact](https://img.shields.io/badge/Pact-contracts-4A4A55?style=flat-square)
-
-> A seller SPA and a server-rendered customer-service console on top of four Spring Boot services (orders, inventory, payments, fulfilment), each owning its own Postgres schema, with consumer-driven contracts between every client and service, and a Three.js view of the order domain.
-
-**[→ Try the live 3D visualization](https://fulfill-ops.vercel.app)** — no install required.
+[![Angular](https://img.shields.io/badge/Angular_21-DD0031?style=flat-square&logo=angular&logoColor=white)](https://angular.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot_4-6DB33F?style=flat-square&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Java](https://img.shields.io/badge/Java_21-007396?style=flat-square&logo=openjdk&logoColor=white)](https://openjdk.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL_17-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Redpanda](https://img.shields.io/badge/Redpanda-00AEF0?style=flat-square)](https://redpanda.com)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-5A5CE0?style=flat-square)](https://opentelemetry.io)
+[![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat-square&logo=three.js&logoColor=white)](https://threejs.org)
+[![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev)
+[![Pact](https://img.shields.io/badge/Pact_contracts-4A4A55?style=flat-square)](https://pact.io)
 
 </div>
 
-<p align="center">
-  <img src="docs/ops-floor-screenshot.png" alt="Ops Floor — a Three.js scene showing seller and CS order parcels on status lanes, SKU stock towers, and dashed divergence arcs connecting orders that disagree between the two stores" width="100%" />
-</p>
+## The problem, in two sentences
 
-<p align="center"><em>Ops Floor in its default seed mode: seller orders (left) and CS orders (right) from the project's original two separate stores, with dashed arcs on the four orders that disagreed. The apps now share one order store; see <code>TRADEOFFS.md</code>.</em></p>
+An order has to hold stock, take a customer's money and claim a slot in a warehouse — three
+different databases on three different services — so something will eventually go wrong halfway
+through. This system makes that recoverable and then **proves** it: 1,000 orders placed
+simultaneously against 100 units confirm exactly 100, and killing any service mid-order loses
+nothing.
+
+## See it running
+
+**[▶️ 2m50s demo](docs/demo.mp4)** — the real system, filmed live. *(Hosted copy below; download
+[docs/demo.mp4](docs/demo.mp4) if it does not play inline.)*
+
+The video is the primary demo: it was recorded by a script against a running stack, so the orders on
+the 3D floor, the trace in Jaeger and the metrics on the dashboard are all real and were produced as
+it filmed. Recreate it with `node e2e-tests/record-demo.mjs`.
+
+**[→ Try the 3D ops floor](https://fulfill-ops.vercel.app)** — no install required, but note it runs
+in **seed mode**: the deployed demo is front-end only, with no backend behind it. The video is what
+shows the real system. See [Limitations](#limitations).
 
 ---
 
-## 🏗️ Architecture
+## Results
 
-| Component | Stack | Runs on | Purpose |
-|---|---|---|---|
-| `services/order-service/` | Spring Boot 4, JPA, Flyway | `:8081` | Orders; issues access tokens |
-| `services/inventory-service/` | Spring Boot 4, JPA, Flyway | `:8082` | SKUs, on-hand and reserved stock |
-| `services/payment-service/` | Spring Boot 4, JDBC, Flyway | `:8083` | Simulated payments, one charge per order |
-| `services/fulfilment-service/` | Spring Boot 4, JDBC, Flyway | `:8084` | Warehouse slot allocation |
-| `common/` | Spring Security resource server | — | JWT validation and error mapping shared by the services |
-| `seller-dashboard/` | Angular 21 (standalone, RxJS, Reactive Forms) | `:4200` | Inventory and order visibility for sellers |
-| `cs-console/` | Spring Boot 4 + Thymeleaf + jQuery | `:8080` | Order lookup, refunds and shipping for CS reps; a client of order-service |
-| `ops-floor/` | Vite + React + react-three-fiber | `:5174` | 3D visualization of the order domain |
-| `contracts/pacts/` | Pact | — | Consumer-driven contracts, verified by each provider's build |
-| `e2e-tests/` | Playwright + TypeScript | — | UI-level assertions over all three frontends |
+Every number here is produced by a script in this repository. Every command is the one that produced
+it.
+
+| # | Result | Baseline | How it was measured | Reproduce |
+|---|---|---|---|---|
+| 1 | **300 orders for 100 units → exactly 100 reservations, 0 oversold** | **300 of 300 were told yes** — the naive check-then-write oversells 3× | 300 threads reserve 1 unit each against a product with 100 on hand | `./mvnw -pl services/inventory-service -Dtest=ReservationsTest test` |
+| 2 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected** | same naive reserve path, same 3× oversell | 1,000 concurrent HTTP orders at 100 clients, then nine cross-store invariants | `./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100` |
+| 3 | **All 7 failure scenarios hold**, 300 orders stranded mid-saga each time | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries; then the invariants | `./scripts/chaos.sh` |
+| 4 | **3,000 orders/min, end-to-end p99 3,795 ms** at 50/s offered | — | k6, Apple M5 / 10 cores / 16 GB, with k6 + 4 services + Postgres + Redpanda on that one host | `RATE=50 DURATION=2m ./scripts/load-test.sh` |
+| 5 | **1,200 orders/min, end-to-end p99 2,609 ms** at 20/s offered | — | same host, half the rate | `RATE=20 DURATION=2m ./scripts/load-test.sh` |
+| 6 | **One order, 13 spans, 4 services** in ~750 ms | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
+| 7 | 90 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
+
+**On the baselines.** There is no public benchmark for a bespoke order saga, so the only honest
+baseline is the obvious implementation of the thing being fixed. Row 1 measures it: read the counter,
+check there is room, write it back — and 300 concurrent contenders for 100 units are *all* told yes,
+because every thread read the same value and decided independently. The shipped code replaces that
+with one conditional `UPDATE`, where the row lock makes a competing writer re-check against the
+committed value, and a `CHECK` constraint behind it. Rows 2–6 have no meaningful baseline and are
+reported without one.
+
+**What "end-to-end" means in rows 4 and 5**, since it is the only figure worth quoting: `POST
+/api/orders` returns 202 the moment the order and its reserve command are committed — the order is
+not fulfilled then. The number is from the client's POST to its first observation of a terminal
+`sagaStep`, polled every 200 ms, so that granularity is up to 200 ms of every figure and flatters the
+p99 slightly. The bare POST is 58 ms p99 at 50/s.
+
+Full detail, including every failure scenario and what the recovery actually was:
+[`docs/ordering-invariants.md`](docs/ordering-invariants.md) and [`docs/performance.md`](docs/performance.md).
+
+---
+
+## Architecture
 
 ```
- seller-dashboard (Angular) ──► order-service ─────► order_svc      ┐
-                            └─► inventory-service ─► inventory_svc  │ one Postgres,
- cs-console (Thymeleaf) ─────► order-service                        │ one login role
- ops-floor ──► cs-console /api/ops (read-only)                      │ per schema
-                               payment-service ────► payment_svc    │
-                               fulfilment-service ─► fulfilment_svc ┘
+                        seller-dashboard (Angular 21)
+                        cs-console (Spring Boot + Thymeleaf)
+                        ops-floor (React + Three.js)
+                                   │  RS256 JWT, verified against order-service's JWKS
+                                   ▼
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │                          order-service  :8081                              │
+  │   orders · saga_step · the saga · reconciliation · token issuance          │
+  └────────────────────────────────────────────────────────────────────────────┘
+         │                    │                    │                    │
+         │ order.reserve      │ inventory.reserved │ payment.charged      │ fulfilment.allocated
+         │   .requested        │                    │                    │
+         ▼                    ▼                    ▼                    ▼
+  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+  │  inventory   │   │   payment    │   │ fulfilment   │   │  cs-console  │
+  │   :8082      │   │    :8083     │   │    :8084     │   │    :8080     │
+  │ products     │   │ payments     │   │ warehouses   │   │ (no data)    │
+  │ reservations │   │ unique by    │   │ allocations  │   └──────────────┘
+  │ CHECK        │   │ order_number │   │ CHECK        │
+  │ reserved ≤   │   └──────────────┘   │ allocated ≤  │
+  │ on_hand      │                      │ capacity     │  ──► /api/ops (public, read-only)
+  └──────────────┘                      └──────────────┘        to the 3D ops floor
+         │                    │                    │
+         └────────────────────┴────────────────────┘
+                              ▲
+        ┌─────────────────────┴──────────────────────┐
+        │  Redpanda · one topic, keyed by order      │  outbox → relay → topic → inbox → handler
+        └─────────────────────┬──────────────────────┘  every event at-least-once, applied once
+                              │
+   ┌──────────────────────────┴───────────────────────────┐
+   │  one Postgres instance · one schema and login role  │  a role cannot read another's tables
+   │  per service · checked by scripts/check-schema-isolation.sh
+   └──────────────────────────────────────────────────────┘
+
+  Observability (--profile observability): Jaeger · Prometheus · Grafana
 ```
 
-Each service's database role owns exactly one schema and has no rights on any other, so services cannot read each other's tables (checked by `scripts/check-schema-isolation.sh` in CI). Every service is a stateless JWT resource server. `order-service` signs one-hour RS256 tokens for the operator accounts (seller, CS, and a read-only ops account) and publishes only its public key at `/.well-known/jwks.json`; the other services verify against it and cannot sign tokens themselves. `payment-service` and `fulfilment-service` implement idempotent charge/refund and allocate/cancel/ship operations with a read-only HTTP API; no order flow calls them yet.
+**The order saga.** `POST /api/orders` commits the order *and* the command to reserve its stock in one
+transaction, then the work happens over Kafka: inventory holds the stock, payment takes the money,
+fulfilment claims a slot, order-service confirms. A refused step fails the order, broadcasts one
+compensation request, and each service undoes its own effect.
 
-Each app has its own `README.md` explaining why its stack was chosen. `TRADEOFFS.md` documents the notable compromises.
-
----
-
-## ✨ Why two stacks — and a third view
-
-FulfillOps mirrors a common real-world scenario: a modern reactive frontend for one user type (sellers) alongside a legacy-style server-rendered console for another (customer service reps), both driven by the same order and inventory domain.
-
-`ops-floor/` adds a third view of that domain. Its default seed mode replays the project's original two-store dataset and draws an arc between orders that disagreed across the stores.
-
-**A few things worth a closer look if you're reviewing the code:**
-
-- **The database enforces the invariants.** `CHECK (reserved <= on_hand)` on inventory, a unique order number on payments (so a retried charge cannot charge twice), and `allocated <= capacity` on warehouses. Integration tests exercise each one, including concurrent charges and allocations from parallel threads.
-- **Contracts, not hope.** The Angular services, the CS console's client and the services agree through Pact contracts: consumers record what they send and need, providers replay it against themselves with real Postgres, and CI fails if a regenerated contract differs from the committed one.
-- **Rendering discipline, not just a scene.** `ops-floor/` runs `frameloop="demand"`, batches every parcel/tower/lane into a handful of `InstancedMesh` draw calls, and patches one shared material via `onBeforeCompile`. `?stats=1` exposes draw calls and triangle count live.
-- **A canvas is opaque to a test runner — so it isn't treated as one.** Scene state is mirrored into a hidden DOM node, so Playwright asserts on rendered state the same way it does for the Angular and Thymeleaf apps.
+Nothing above is a distributed transaction. The guarantees come from a single-database transaction per
+step, at-least-once delivery, and effects that are idempotent — which yields the appearance of
+exactly-once without ever claiming it. [`docs/design.md`](docs/design.md) states the consistency
+model precisely.
 
 ---
 
-## 🚀 Prerequisites
-
-- **Docker** with Compose v2 (runs Postgres, the services and the CS console)
-- **Node.js 22** for the frontends and the e2e suite
-- **JDK 21** only to run the Maven build and tests outside Docker (`./mvnw` is bundled)
-- **Playwright's Chromium** (`npx playwright install chromium`)
-
----
-
-## ▶️ Run it
+## Running it
 
 ```bash
-cp .env.example .env                    # local-only secrets and accounts
-docker compose up --build --wait        # Postgres, 4 services, CS console (:8080)
+cp .env.example .env
+docker compose up --build --wait          # Postgres, Redpanda, 4 services, CS console
 
 cd seller-dashboard && npm install && npm start   # :4200, proxies /api to the services
-cd ops-floor && npm install && npm run dev        # :5174, standalone seed mode
+cd ops-floor && npm install && VITE_SOURCE=live npm run dev   # :5174, live from the real system
 ```
 
-Local accounts (from `.env.example`): seller `seller` / `seller-dev-password`, CS `cs` / `cs-dev-password`. The `demo` Spring profile seeds a catalog, 12 orders and two warehouses on first start.
+Requires Docker with Compose v2 and Node 22. JDK 21 only to run Maven outside Docker (`./mvnw` is
+bundled). Accounts from `.env.example`: seller `seller`/`seller-dev-password`, CS
+`cs`/`cs-dev-password`.
 
-- **Seller dashboard without a backend:** open `http://localhost:4200/?demo=1` for the built-in seed data; nothing is saved.
-- **Ops Floor against the stack:** `VITE_SOURCE=live npm run dev` polls the CS console's read-only `/api/ops/orders` feed for the CS plane; the seller plane stays seed-backed (see `ops-floor/README.md`).
+To add the observability stack — traces, metrics, the dashboard on <http://localhost:3000>:
+
+```bash
+docker compose --profile observability up -d --wait
+```
 
 ---
 
-## ✅ Tests
+## Tests
 
-| Suite | Command | What it covers |
-|---|---|---|
-| Services and CS console | `./mvnw verify` | Integration tests against real Postgres (Testcontainers): auth and roles, validation, idempotent refunds and charges, concurrent charges and allocations, DB constraints; Pact provider verification; CS console rendering, CSRF and role checks |
-| Seller dashboard | `cd seller-dashboard && npx ng test --watch=false` | Pact consumer tests driving the real Angular services |
-| End to end | `cd e2e-tests && npx playwright test` | Recreates the compose stack on a fresh database, then drives all three frontends in Chromium |
-| Schema isolation | `scripts/check-schema-isolation.sh` | Each service role can use only its own schema (run with the stack up) |
+| Suite | Command |
+|---|---|
+| Services and CS console — 90 tests | `./mvnw verify` |
+| Seller dashboard — build, consumer contracts, formatting | `cd seller-dashboard && npx ng build && npx ng test --watch=false && npm run format:check` |
+| End to end — 15 tests, full stack per run | `cd e2e-tests && npx playwright test` |
+| Ordering invariants — the 1,000-order claim | `./scripts/ordering-harness.py storm --orders 1000` |
+| Failure injection | `./scripts/chaos.sh` |
+| Load test | `./scripts/load-test.sh` |
+| One order's trace | `./scripts/trace-order.sh` |
+| Schema isolation | `scripts/check-schema-isolation.sh` |
 
-CI (`.github/workflows/ci.yml`) runs all four on every push and pull request.
+CI runs the first four on every push, plus failure injection on demand:
 
-**What the end-to-end suite proves**
-
-- **Seller dashboard** — sign-in is required and a wrong password is rejected; orders load from order-service; adding a product and editing stock go through inventory-service; `?demo=1` works offline.
-- **CS console** — search-as-you-type filtering and the detail page; the refund confirmation modal flips the badge inline and the refund survives a reload; shipping a processing order; sign-out ends the session.
-- **Ops Floor** — the divergence count matches the known seed overlap; status filtering dims the right parcels without unmounting the canvas; selecting a divergent order shows a field-by-field diff; pausing freezes the sim clock; the seller plane has no REFUNDED lane.
+```bash
+gh workflow run ci --ref main -f chaos=true
+```
 
 ---
 
-## 📁 Project Structure
+## Limitations
+
+Stated plainly, because a limitation you can name is better than one a reviewer finds.
+
+**The live demo is front-end only.** <https://fulfill-ops.vercel.app> runs the 3D ops floor in seed
+mode with no backend behind it. The video and the scripts are what show the real system. Hosting the
+five-service stack needs a persistent database, which no free tier provides — a real deployment
+wants roughly $5–7/month on Fly.io or Render.
+
+**Payments never decline.** There is no simulated decline, so a charge cannot fail for a business
+reason. The compensation path from a payment failure is therefore unexercised, and the
+one-charge-per-order rule has only been tested against duplicates, not declines. This is the
+largest realism gap in the system.
+
+**No dead-letter topic.** A message a handler cannot process is retried by the broker and then
+dropped silently. Ordering still holds — reconciliation is the net — but nothing pages anyone. A
+dead-letter topic is the right answer and is not built.
+
+**Nothing consumes stock on despatch.** A shipped order still counts as holding its reservation, so
+the oversell invariant is stated per order rather than as a running total. See
+[`docs/design.md`](docs/design.md#known-modelling-gap).
+
+**The Ops Floor's seller plane is seed-backed.** Sellers and CS read the same order store now, so a
+live seller plane would only mirror the CS plane. The CS plane is live and shows real saga state;
+the HUD says which is which.
+
+**The relay is the throughput ceiling.** One thread, one blocking send per event, one batch per tick.
+Publication is bounded by batch size over the tick interval. More relay instances are safe
+(`FOR UPDATE SKIP LOCKED` keeps them off each other's rows) but that is untested at scale.
+
+**Reconciliation is unbounded.** It re-reads every unconfirmed order each pass, including old failed
+ones, and re-announces a still-incomplete one every pass. Safe because every consumer is idempotent,
+unbounded in cost.
+
+**One host, one Postgres, one broker node.** No partitions, no replication, no multi-region, no
+failover. The oversell guarantee is enforced by the database and reproduced on a second machine, but
+the throughput numbers are a property of one laptop.
+
+**Tracing was sampled at 100%** during the load test, so the exporter's cost is *inside* those
+numbers. Lower `TRACING_SAMPLE_RATE` and re-measure before quoting capacity.
+
+**Warehouse capacity is a migration, not configuration.** The load test has to patch it before a run,
+because it is a real ceiling: the first 20 orders/s run failed 219 of 1,200 orders on slots with
+500,000 units of stock available. The system behaved correctly — no slot means fail, refund, release
+— but a deployment that does not size capacity gets a rising failure rate rather than a rising queue.
+
+**The signing key is generated at startup,** so order-service cannot run as several replicas and a
+restart invalidates issued tokens. Sign-in throttling is per-instance and in memory.
+
+---
+
+## Documentation
+
+- [`docs/design.md`](docs/design.md) — context, goals, non-goals, the consistency model, failure
+  handling, alternatives considered, trade-offs, risks
+- [`docs/ordering-invariants.md`](docs/ordering-invariants.md) — the nine invariants and the failure
+  injection results
+- [`docs/performance.md`](docs/performance.md) — throughput, latency, tracing, metrics
+- [`TRADEOFFS.md`](TRADEOFFS.md) — the smaller decisions and why each went the way it did
+- [`contracts/pacts/`](contracts/pacts/) — consumer-driven contracts, verified by each provider
+
+## Project layout
 
 ```
-FulfillOps/
-├── services/            # order, inventory, payment and fulfilment services (Spring Boot 4)
-├── common/              # shared JWT resource-server config and API error mapping
+├── services/            # order, inventory, payment and fulfilment (Spring Boot 4, Java 21)
+├── common/              # shared JWT resource-server config, API errors, transactional messaging
 ├── cs-console/          # Spring Boot + Thymeleaf console for CS reps
 ├── seller-dashboard/    # Angular 21 SPA for sellers
-├── ops-floor/           # Vite + React + Three.js view of the order domain
-├── contracts/pacts/     # consumer-driven contracts (generated by consumer tests, committed)
-├── e2e-tests/           # Playwright + TypeScript, cross-app UI assertions
-├── deploy/postgres/     # per-service roles and schemas, created on first start
-├── scripts/             # helper scripts (schema isolation check, run-all)
-├── compose.yaml         # local stack
-├── README.md
-└── TRADEOFFS.md         # documented compromises and design decisions
+├── ops-floor/           # Vite + React + Three.js live view of the order domain
+├── contracts/pacts/     # consumer-driven contracts, generated by consumer tests, committed
+├── e2e-tests/           # Playwright suite, and the demo recorder
+├── deploy/              # Postgres roles and schemas; observability provisioning
+├── scripts/             # invariants, ordering harness, chaos, load test, trace
+└── compose.yaml         # the whole stack; --profile observability adds Jaeger, Prometheus, Grafana
 ```
 
----
+## License
 
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
+MIT — see [LICENSE](./LICENSE).
