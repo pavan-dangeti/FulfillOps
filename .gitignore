@@ -4,6 +4,8 @@ dist/
 target/
 playwright-report/
 test-results/
+# demo-raw/ is the recorder's intermediate output; docs/demo.mp4 is the committed artefact
+e2e-tests/demo-raw/
 *.log
 .DS_Store
 .env
