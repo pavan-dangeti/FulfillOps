@@ -231,6 +231,11 @@ def command_storm(args):
        f"{rejected} rejected, no invariant broken")
 
 
+def command_place(args):
+    """Places one order and prints its number. For scripts that want an order, not a measurement."""
+    print(place_order(args.sku, args.quantity) or "")
+
+
 def command_check(args):
     violations = check()
     if violations:
@@ -342,6 +347,11 @@ def main():
     settle = sub.add_parser("settle", help="wait until nothing is in flight")
     settle.add_argument("--timeout", type=int, default=180)
     settle.set_defaults(run=command_settle)
+
+    place = sub.add_parser("place", help="place one order and print its number")
+    place.add_argument("--sku", default="SKU-STORM")
+    place.add_argument("--quantity", type=int, default=1)
+    place.set_defaults(run=command_place)
 
     check_parser = sub.add_parser("check", help="check every invariant, exit non-zero on any")
     check_parser.set_defaults(run=command_check)
