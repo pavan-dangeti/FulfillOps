@@ -257,9 +257,12 @@ The trade is recorded rather than hidden.
 
 ## Observability is a compose profile, not part of the ordinary stack
 
-`compose.observability.yaml` adds Jaeger, Prometheus and Grafana behind the `observability` profile,
-so `docker compose up` stays a five-service system and the demo does not pay for three containers
-nobody is looking at. Grafana's dashboard is provisioned from a file in `deploy/observability/`,
+Jaeger, Prometheus and Grafana sit behind the `observability` profile in `compose.yaml`, so
+`docker compose up` stays a seven-service system and the demo does not pay for three containers nobody
+is looking at. They began in a separate override file, which had a real flaw: `--profile` only works
+against a `profiles:` key, so `docker compose --profile observability up` silently started no
+observability services while appearing to work. One file with a real profile is both shorter and the
+only version that does what the documented command says. Grafana's dashboard is provisioned from a file in `deploy/observability/`,
 which means it is reviewable in a diff rather than being a thing someone clicked together once.
 
 Three custom metrics exist because nothing *fails* when the messaging layer goes wrong: the
