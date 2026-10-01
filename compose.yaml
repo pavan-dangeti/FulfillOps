@@ -168,5 +168,74 @@ services:
       OPS_FEED_PASSWORD: ${OPS_FEED_PASSWORD:-}
     ports: ["127.0.0.1:8080:8080"]
 
+  # --- observability --------------------------------------------------------------
+  # Behind the "observability" profile so the ordinary stack stays five services:
+  #   docker compose up -d --wait
+  #   docker compose --profile observability up -d --wait
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/all-in-one:1.62.0
+    restart: unless-stopped
+    environment:
+      # Collector only, no query storage we care about; the UI still serves traces held in memory.
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"   # UI and query API
+      - "127.0.0.1:4318:4318"     # OTLP HTTP, the exporters' target
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:14269/"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.1.0
+    restart: unless-stopped
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+    ports:
+      - "127.0.0.1:9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:11.5.1
+    restart: unless-stopped
+    environment:
+      # Anonymous read-only viewer: a local demo dashboard needs no login, and this container
+      # holds no data worth protecting. Never do this on a network anyone else can reach.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
 volumes:
   pgdata:
+  promdata:
+  grafanadata:
