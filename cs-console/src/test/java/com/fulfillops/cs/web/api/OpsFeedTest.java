@@ -14,7 +14,8 @@ class OpsFeedTest {
     @Test
     void publishesInitialsAndNoEmail() {
         var order = new Order("ORD-1048", "Priya Nair", "priya.nair@example.com", "SKU-1003", "USB-C Hub 7-in-1",
-                2, new BigDecimal("90.00"), OrderStatus.PENDING, OffsetDateTime.now(), null);
+                2, new BigDecimal("90.00"), OrderStatus.PENDING, Order.SagaStep.RESERVED, null,
+                OffsetDateTime.now(), null);
         var view = OpsApiController.OrderView.from(order);
         assertThat(view.customerName()).isEqualTo("P. N.");
         assertThat(view.email()).isEmpty();

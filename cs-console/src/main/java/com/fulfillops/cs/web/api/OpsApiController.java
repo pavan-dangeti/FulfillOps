@@ -91,12 +91,18 @@ public class OpsApiController {
             int quantity,
             BigDecimal total,
             String status,
+            // The saga's progress, so the visualisation can show an order in flight and one that
+            // died, rather than only the states a customer would recognise.
+            String sagaStep,
+            String failureReason,
             OffsetDateTime createdAt,
             OffsetDateTime refundedAt) {
 
         static OrderView from(Order o) {
             return new OrderView(o.orderNumber(), initials(o.customerName()), "", o.sku(), o.productName(), o.quantity(),
-                    o.total(), o.status().name(), o.createdAt(), o.refundedAt());
+                    o.total(), o.status().name(),
+                    o.sagaStep() == null ? null : o.sagaStep().name(),
+                    o.failureReason(), o.createdAt(), o.refundedAt());
         }
 
         /** "Priya Nair" -> "P. N." */

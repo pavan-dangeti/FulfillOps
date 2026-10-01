@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import type { OpsSnapshot, StoreId, SellerStatus } from '../data/source';
+import type { OpsSnapshot, SellerStatus, StoreId } from '../data/source';
+
+// Any status either plane can be in. The seller plane never reaches REFUNDED or FAILED, but a
+// scene holds both planes, so the lane table and the filter are typed against the wider union.
+export type AnyStatus = SellerStatus | 'REFUNDED' | 'FAILED';
 import { computeDivergences } from '../data/source';
 
 // ---------- palette (from the shared design tokens; constructed in sRGB so
@@ -31,16 +35,21 @@ export const SELLER_SPAN = { x0: -18, x1: -8 };
 export const CS_SPAN = { x0: 8, x1: 18 };
 export const SKU_COLUMN = { xs: [-4, -2, 0, 2, 4], z: 0 };
 
-export const LANES: { status: SellerStatus | 'REFUNDED'; z: number }[] = [
+export const LANES: { status: AnyStatus; z: number }[] = [
   { status: 'PENDING', z: -6 },
   { status: 'PROCESSING', z: -2 },
   { status: 'SHIPPED', z: 2 },
   { status: 'DELIVERED', z: 6 },
   { status: 'REFUNDED', z: 10 },
+  // Where the saga gave up. Placed next to REFUNDED because both are outcomes the seller plane
+  // cannot produce, and both mean the order will never ship.
+  { status: 'FAILED', z: 11 },
 ];
 
 export const LANE_Z = new Map<string, number>(LANES.map((l) => [l.status as string, l.z]));
-export const SELLER_LANE_COUNT = 4; // physically no REFUNDED lane on the seller side
+// Four, because the seller model has exactly four statuses. Derived rather than counted by
+// hand so it cannot drift; asserted in the end-to-end suite.
+export const SELLER_LANE_COUNT = 4;
 export const CS_LANE_COUNT = 5;
 
 export const TOWER_SHELL_H = 6.6;
@@ -73,7 +82,7 @@ export const BUCKET_EMISSIVE = [0.25, 1.0, 2.0, 3.6];
 // ---------- ui flags the scene derives from ----------
 
 export interface UiFlags {
-  statusFilter: SellerStatus | 'REFUNDED' | null;
+  statusFilter: AnyStatus | null;
   planes: { seller: boolean; cs: boolean };
   isolate: boolean;
 }

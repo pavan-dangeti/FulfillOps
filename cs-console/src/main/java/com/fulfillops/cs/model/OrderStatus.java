@@ -5,5 +5,7 @@ public enum OrderStatus {
     PROCESSING,
     SHIPPED,
     DELIVERED,
-    REFUNDED
+    REFUNDED,
+    /** The saga could not complete and any payment or stock was released. */
+    FAILED
 }

@@ -11,6 +11,7 @@ import {
   isDimmed,
   makeFloorMaterial,
 } from './shared';
+import { SELLER_STATUSES, type SellerStatus } from '../data/source';
 import { useStore } from '../store';
 
 // One floor plane; the two store bands are tinted inside the floor's own
@@ -105,7 +106,9 @@ export function Labels() {
         <div className={`label-3d plane cs${csDim ? ' dimmed' : ''}`}>cs store · spring</div>
       </Html>
       {LANES.map((lane) => {
-        const isSeller = lane.status !== 'REFUNDED';
+        // Derived from the status list rather than by excluding names one at a time: a new
+        // outcome lane would otherwise appear on the seller plane by default, which is wrong.
+        const isSeller = SELLER_STATUSES.includes(lane.status as SellerStatus);
         const d = isSeller ? sellerDim : csDim;
         return (
           <group key={lane.status}>

@@ -3,7 +3,7 @@
 // order store, so a live seller plane would only mirror the CS plane; in live
 // mode the seller plane stays seed-backed and the HUD says so explicitly.
 import { SeedSource } from './seed';
-import type { CsOrder, CsStatus, LogEntry } from './source';
+import type { CsOrder, CsStatus, LogEntry, SagaStep } from './source';
 
 const CS_BASE = import.meta.env.VITE_CS_URL ?? 'http://localhost:8080';
 const POLL_MS = 2500;
@@ -17,6 +17,8 @@ interface OrderViewDto {
   quantity: number;
   total: number;
   status: CsStatus;
+  sagaStep: SagaStep | null;
+  failureReason: string | null;
   createdAt: string | null;
   refundedAt: string | null;
 }
@@ -57,6 +59,8 @@ export class LiveSource extends SeedSource {
         quantity: r.quantity,
         total: r.total,
         status: r.status,
+        sagaStep: r.sagaStep ?? null,
+        failureReason: r.failureReason ?? null,
         createdAt: r.createdAt ?? '',
         refundedAt: r.refundedAt ?? null,
       }));
@@ -79,7 +83,14 @@ export class LiveSource extends SeedSource {
         snap.csOrders.length === csOrders.length &&
         snap.csOrders.every((a, i) => {
           const b = csOrders[i];
-          return a.orderNumber === b.orderNumber && a.status === b.status && a.quantity === b.quantity;
+          // sagaStep is compared too: an order moving from PAID to ALLOCATED changes nothing a
+          // customer sees, and would otherwise be dropped as an unchanged row.
+          return (
+            a.orderNumber === b.orderNumber &&
+            a.status === b.status &&
+            a.quantity === b.quantity &&
+            a.sagaStep === b.sagaStep
+          );
         });
       if (same) return;
       this.setSnap({
