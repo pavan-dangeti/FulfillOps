@@ -6,7 +6,17 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /src
 COPY . .
 ARG MODULE
-RUN --mount=type=cache,target=/root/.m2 \
+# The cache mount covers the dependency repository only, not all of ~/.m2.
+#
+# The Maven wrapper downloads its own distribution into ~/.m2/wrapper/dists and then moves it into
+# place. With the whole of ~/.m2 shared, the four service images that `docker compose up --build`
+# builds in parallel raced on that move: one container removed the target directory while another was
+# writing into it, and the build died with "inter-device move failed ... Directory not empty" and
+# "mvn: not found". It is intermittent, and it took three green runs before it appeared.
+#
+# Mounting just the repository keeps the expensive part of the cache — downloaded artifacts — while
+# leaving each build's wrapper distribution to itself.
+RUN --mount=type=cache,target=/root/.m2/repository \
     ./mvnw -q -B -pl "${MODULE}" -am package -DskipTests \
  && cp "${MODULE}"/target/*.jar /app.jar
 

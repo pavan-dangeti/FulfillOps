@@ -18,7 +18,6 @@ DURATION=${DURATION:-2m}
 UNITS=${UNITS:-500000}
 P99_BUDGET_MS=${P99_BUDGET_MS:-5000}
 K6_IMAGE=${K6_IMAGE:-grafana/k6:0.54.0}
-COMPOSE_FILES="-f compose.yaml -f compose.observability.yaml"
 
 if ! docker info >/dev/null 2>&1; then
   echo "docker is not running" >&2
@@ -44,7 +43,7 @@ printf '  k6 client, 4 Spring Boot services, Postgres and Redpanda all on this o
 # a real deployment would size capacity to expected throughput.
 EXPECTED=$(( RATE * (DURATION_SECONDS=${DURATION_SECONDS:-120}) ))
 CAPACITY=$(( EXPECTED + 1000 ))
-docker compose $COMPOSE_FILES exec -T postgres psql -U postgres -d fulfillops -q -c \
+docker compose exec -T postgres psql -U postgres -d fulfillops -q -c \
   "update fulfilment_svc.warehouses set capacity = $CAPACITY" >/dev/null 2>&1
 printf '  fulfilment capacity raised to %s slots for this run\n' "$CAPACITY"
 
