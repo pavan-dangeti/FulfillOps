@@ -12,7 +12,7 @@ import java.util.UUID;
  * applied twice. {@code orderNumber} is the broker key, which is what makes a single order's events
  * arrive in the order they were written.
  */
-public record Event(String id, String type, String orderNumber, JsonNode body) {
+public record Event(String id, String type, String orderNumber, JsonNode body, String traceparent) {
 
     public static final String RESERVE_REQUESTED = "order.reserve.requested";
     public static final String COMPENSATION_REQUESTED = "order.compensation.requested";
@@ -26,11 +26,20 @@ public record Event(String id, String type, String orderNumber, JsonNode body) {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     public static Event of(String type, String orderNumber, ObjectNode body) {
-        return new Event(UUID.randomUUID().toString(), type, orderNumber, body);
+        return new Event(UUID.randomUUID().toString(), type, orderNumber, body, null);
+    }
+
+    /** With the producer's trace context attached, so a consumer's span joins the same trace. */
+    public static Event of(String type, String orderNumber, ObjectNode body, String traceparent) {
+        return new Event(UUID.randomUUID().toString(), type, orderNumber, body, traceparent);
     }
 
     public static Event of(String type, String orderNumber) {
-        return of(type, orderNumber, JSON.createObjectNode());
+        return of(type, orderNumber, JSON.createObjectNode(), null);
+    }
+
+    public Event traced(String parentTraceparent) {
+        return new Event(id, type, orderNumber, body, parentTraceparent);
     }
 
     /** A fresh body for a caller to fill in before {@link #of}. */
@@ -64,6 +73,9 @@ public record Event(String id, String type, String orderNumber, JsonNode body) {
         envelope.put("id", id);
         envelope.put("type", type);
         envelope.put("orderNumber", orderNumber);
+        if (traceparent != null) {
+            envelope.put("traceparent", traceparent);
+        }
         envelope.set("body", body);
         return envelope.toString();
     }
@@ -71,11 +83,13 @@ public record Event(String id, String type, String orderNumber, JsonNode body) {
     public static Event fromJson(String json) {
         try {
             JsonNode node = JSON.readTree(json);
+            JsonNode parent = node.get("traceparent");
             return new Event(
                     node.get("id").asText(),
                     node.get("type").asText(),
                     node.get("orderNumber").asText(),
-                    node.get("body"));
+                    node.get("body"),
+                    parent == null || parent.isNull() ? null : parent.asText());
         } catch (Exception e) {
             throw new IllegalArgumentException("Unreadable event: " + json, e);
         }

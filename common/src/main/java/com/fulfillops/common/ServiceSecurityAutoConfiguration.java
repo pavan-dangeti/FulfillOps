@@ -139,7 +139,13 @@ public class ServiceSecurityAutoConfiguration {
                 .csrf(AbstractHttpConfigurer::disable) // no cookies or sessions: Bearer tokens only
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/health/**", JWKS_PATH).permitAll()
+                        // Health and metrics are read-only operational endpoints, permitted the
+                        // same way Spring Boot permits them by default: the Prometheus scrape model
+                        // has no credential to present. Only these two are exposed by the actuator
+                        // config, so nothing sensitive sits behind them, and each service binds to
+                        // 127.0.0.1. A public deployment should put them behind the network anyway.
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus", JWKS_PATH)
+                        .permitAll()
                         .requestMatchers(props.publicPaths().toArray(String[]::new)).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))

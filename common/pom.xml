@@ -39,6 +39,17 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
+    <!-- The starter, not the individual bridge and exporter: Boot 4 moved tracing
+         auto-configuration out of spring-boot-actuator-autoconfigure, and without this module
+         there is no Tracer bean at all, so nothing is traced and nothing is exported. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-opentelemetry</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
