@@ -254,3 +254,41 @@ an event to test a duplicate is one `update` against the outbox, and the broker'
 is what lets the saga assume its steps arrive in sequence. Splitting into a topic per type would buy
 a little efficiency and cost a provisioning step, and would make the failure tests harder to write.
 The trade is recorded rather than hidden.
+
+## Observability is a compose profile, not part of the ordinary stack
+
+`compose.observability.yaml` adds Jaeger, Prometheus and Grafana behind the `observability` profile,
+so `docker compose up` stays a five-service system and the demo does not pay for three containers
+nobody is looking at. Grafana's dashboard is provisioned from a file in `deploy/observability/`,
+which means it is reviewable in a diff rather than being a thing someone clicked together once.
+
+Three custom metrics exist because nothing *fails* when the messaging layer goes wrong: the
+outbox just accumulates. `outbox_unpublished`, `inbox_processed_total` and `outbox_relayed_total`
+are the three numbers that would change what an operator does.
+
+**Tracing is built in the dispatcher rather than left to spring-kafka.** Record-level observation
+did not produce consumer spans in this setup, and the failure mode is the dangerous one: the outbox
+kept working, the metrics looked healthy, and there was simply no trace. Doing it explicitly in
+`EventDispatcher` puts the span boundary where the transaction boundary already is, and keeps
+working regardless of how the container is configured.
+
+The trace context is captured at write time, not at publish time, because the relay publishes on a
+later tick from a different request than the one that made the change. It rides in the event
+envelope rather than a Kafka header so the consumer can read it without depending on record
+observation being enabled.
+
+**`/actuator/prometheus` is unauthenticated**, alongside health. The scrape model has no credential
+to present, only three actuator endpoints are exposed, and each service binds to 127.0.0.1 — but a
+public deployment should still keep them behind the network.
+
+## Fulfilment capacity is the real ceiling, not stock
+
+Stock was the obvious limit, and it is not: `reserved <= on_hand` holds regardless. The binding
+constraint is warehouse capacity, because an order with no free slot cannot be fulfilled, so the
+saga fails it, refunds it and releases its stock. The first 20 orders/s load run failed **219 of
+1,200 orders** with 500,000 units of stock available, purely on slots — 981 of 1,000 were free.
+
+That is the correct outcome, and it is also a number worth stating plainly rather than tuning away:
+the load test raises capacity to fit the run, because a production deployment would size it to
+expected throughput instead. Capacity lives in a migration rather than configuration, which is the
+simplification already recorded above.
