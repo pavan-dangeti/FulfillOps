@@ -342,3 +342,8 @@ hardware-independent — it reproduced on a second machine — but the throughpu
 **7. Payments never decline.** *Certain, high impact for realism.* The payment step cannot fail for a
 business reason, so the compensation path from a payment failure is unexercised and the "one charge
 per order" rule has only been tested against duplicates, not declines.
+
+**8. The end-to-end latency figures are client-measured.** *Certain, low impact.* They come from the
+k6 client polling `GET /api/orders/{n}` every 200 ms, so each figure carries up to 200 ms of
+quantisation, which flatters the p99. The bare POST latency is reported beside them for comparison, and
+a server-side measurement would be the way to remove the uncertainty entirely.
