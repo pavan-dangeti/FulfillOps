@@ -25,6 +25,10 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: inventory-service
+      # Record-level observation, so a stalled record shows up as a span rather than as nothing.
+      # The span that actually links an order together is EventDispatcher's, because that is where
+      # the event's own trace context is readable; this one is for seeing the transport itself.
+      observation-enabled: true
       # A message the handler threw on is retried rather than dropped; at-least-once delivery
       # plus the inbox is what makes that safe.
       enable-auto-commit: false
@@ -41,7 +45,26 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    tags:
+      # One label to group every series by service, so the dashboard needs one set of queries
+      # rather than four.
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      # 1.0 keeps every trace. Lower it for a load test: tracing every span of a burst is a real
+      # cost and would otherwise be part of what the throughput number measures.
+      probability: ${TRACING_SAMPLE_RATE:1.0}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # Boot 4 moved this under management.opentelemetry. With the older
+          # management.otlp.tracing.endpoint the value is simply ignored and the SDK falls back to
+          # http://localhost:4318 — which, inside a container, is the service itself, so spans were
+          # being exported nowhere and nothing reported an error.
+          endpoint: ${OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
 
 ---
 spring:
