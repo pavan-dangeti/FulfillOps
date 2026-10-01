@@ -92,11 +92,14 @@ test.describe('Ops Floor (Three.js operations visualization)', () => {
       timeout: 30_000,
     });
 
-    // the Angular model has no REFUNDED status, so the seller plane has only
-    // four status lanes; the CS plane has the fifth return lane
+    // The seller model has neither REFUNDED nor FAILED, so its plane keeps four status lanes.
+    // The CS plane carries both: a refund is something a CS rep does, and a failed order is
+    // something the order saga leaves behind.
     await expect(page.locator('.label-3d.lane[data-plane="seller"]')).toHaveCount(4);
-    await expect(page.locator('.label-3d.lane[data-plane="cs"]')).toHaveCount(5);
+    await expect(page.locator('.label-3d.lane[data-plane="cs"]')).toHaveCount(6);
     await expect(page.locator('.label-3d.lane[data-plane="seller"]', { hasText: 'REFUNDED' })).toHaveCount(0);
     await expect(page.locator('.label-3d.lane[data-plane="cs"]', { hasText: 'REFUNDED' })).toHaveCount(1);
+    await expect(page.locator('.label-3d.lane[data-plane="seller"]', { hasText: 'FAILED' })).toHaveCount(0);
+    await expect(page.locator('.label-3d.lane[data-plane="cs"]', { hasText: 'FAILED' })).toHaveCount(1);
   });
 });

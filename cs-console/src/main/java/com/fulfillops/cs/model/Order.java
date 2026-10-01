@@ -13,6 +13,14 @@ public record Order(
         int quantity,
         BigDecimal total,
         OrderStatus status,
+        /** How far the order saga got. Null on orders predating the saga. */
+        SagaStep sagaStep,
+        String failureReason,
         OffsetDateTime createdAt,
         OffsetDateTime refundedAt) {
+
+    /** Mirrors order-service's own enum; an unrecognised value is a contract change, not a crash. */
+    public enum SagaStep {
+        STARTED, RESERVED, PAID, ALLOCATED, CONFIRMED, FAILED
+    }
 }

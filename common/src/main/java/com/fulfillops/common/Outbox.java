@@ -3,12 +3,21 @@ package com.fulfillops.common;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -33,29 +42,61 @@ public class Outbox {
     private final JdbcClient jdbc;
     private final KafkaTemplate<Object, Object> kafka;
     private final TransactionTemplate transactions;
+    private final Tracer tracer;
+    private final Propagator propagator;
     private final String topic;
     private final int batchSize;
+    private final Counter relayed;
 
     public Outbox(JdbcClient jdbc,
                  KafkaTemplate<Object, Object> kafka,
                  TransactionTemplate transactions,
+                 ObjectProvider<Tracer> tracer,
+                 ObjectProvider<Propagator> propagator,
+                 MeterRegistry registry,
                  @Value("${fulfillops.messaging.topic:fulfillops}") String topic,
                  @Value("${fulfillops.messaging.batch-size:100}") int batchSize) {
         this.jdbc = jdbc;
         this.kafka = kafka;
         this.transactions = transactions;
+        this.tracer = tracer.getIfAvailable();
+        this.propagator = propagator.getIfAvailable();
+        this.relayed = Counter.builder("outbox.relayed")
+                .description("Events published to the broker")
+                .register(registry);
+        // A backlog that climbs and stays up is the only visible sign that the relay cannot keep
+        // up; nothing errors, the events just queue.
+        Gauge.builder("outbox.unpublished", this, Outbox::unpublished)
+                .description("Events written but not yet relayed to the broker")
+                .register(registry);
         this.topic = topic;
         this.batchSize = batchSize;
     }
 
+    /**
+     * The current trace as a W3C {@code traceparent} value, or null when nothing is being traced.
+     * Captured at write time because the relay publishes later, from a different context.
+     */
+    private String currentTraceparent() {
+        if (tracer == null || propagator == null || tracer.currentSpan() == null) {
+            return null;
+        }
+        Map<String, String> carrier = new HashMap<>();
+        propagator.inject(tracer.currentTraceContext().context(), carrier, Map::put);
+        return carrier.get("traceparent");
+    }
+
     /** Records an event for publication. Must be called inside the transaction that made the change. */
     public Event record(String type, String orderNumber, ObjectNode body) {
-        Event event = Event.of(type, orderNumber, body);
-        jdbc.sql("insert into outbox (event_id, type, order_number, body) values (cast(:id as uuid), :type, :order, cast(:body as jsonb))")
+        Event event = Event.of(type, orderNumber, body, currentTraceparent());
+        jdbc.sql("""
+                        insert into outbox (event_id, type, order_number, body, traceparent)
+                        values (cast(:id as uuid), :type, :order, cast(:body as jsonb), :trace)""")
                 .param("id", event.id())
                 .param("type", type)
                 .param("order", orderNumber)
                 .param("body", body.toString())
+                .param("trace", currentTraceparent())
                 .update();
         return event;
     }
@@ -77,7 +118,7 @@ public class Outbox {
     public void drain() {
         List<Row> batch = transactions.execute(status -> {
             List<Row> rows = jdbc.sql("""
-                            select id, event_id, type, order_number, body::text as body
+                            select id, event_id, type, order_number, body::text as body, traceparent
                             from outbox where published_at is null
                             order by id
                             for update skip locked
@@ -86,13 +127,14 @@ public class Outbox {
                     .query((rs, n) -> new Row(
                             rs.getLong("id"),
                             new Event(rs.getString("event_id"), rs.getString("type"),
-                                    rs.getString("order_number"), parse(rs.getString("body")))))
+                                    rs.getString("order_number"), parse(rs.getString("body")),
+                                    rs.getString("traceparent"))))
                     .list();
             for (Row row : rows) {
                 // Blocking send, so a published marker never outruns the broker acknowledging it.
                 // A failure here propagates and rolls the batch back: the rows stay unpublished
                 // and go out again next tick, which redelivers rather than drops.
-                send(row.event());
+                send(row);
             }
             for (Row row : rows) {
                 jdbc.sql("update outbox set published_at = now() where id = :id").param("id", row.id()).update();
@@ -100,13 +142,17 @@ public class Outbox {
             return rows;
         });
         if (batch != null && !batch.isEmpty()) {
+            relayed.increment(batch.size());
             log.debug("relayed {} event(s) to {}", batch.size(), topic);
         }
     }
 
-    private void send(Event event) {
+    private void send(Row row) {
+        Event event = row.event();
+        ProducerRecord<Object, Object> record =
+                new ProducerRecord<>(topic, event.orderNumber(), event.toJson());
         try {
-            kafka.send(topic, event.orderNumber(), event.toJson()).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            kafka.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while publishing " + event.describe(), e);

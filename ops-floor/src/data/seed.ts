@@ -26,6 +26,9 @@ const SELLER_ORDERS: SellerOrder[] = [
   { id: 'ORD-1038', customer: 'Yuki Tanaka', sku: 'SKU-1005', quantity: 2, total: 79.5, status: 'SHIPPED' },
 ];
 
+// The seed is the project's *original* two-store dataset, replayed from before the order saga
+// existed, so these orders carry no sagaStep at all — which is part of why their plane disagrees
+// with the seller plane. The field is optional for exactly this reason.
 const CS_ORDERS: CsOrder[] = [
   { id: 'ORD-1050', orderNumber: 'ORD-1050', customer: 'Ava Chen', email: 'ava.chen@example.com', sku: 'SKU-1002', productName: 'Mechanical Keyboard', quantity: 1, total: 89.5, status: 'PROCESSING', createdAt: 'T-2h', refundedAt: null },
   { id: 'ORD-1049', orderNumber: 'ORD-1049', customer: 'Marcus Webb', email: 'marcus.webb@example.com', sku: 'SKU-1001', productName: 'Wireless Mouse', quantity: 3, total: 74.97, status: 'SHIPPED', createdAt: 'T-5h', refundedAt: null },

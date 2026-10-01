@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: fulfillops
+    orgId: 1
+    folder: FulfillOps
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

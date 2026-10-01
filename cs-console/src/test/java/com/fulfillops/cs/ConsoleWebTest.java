@@ -36,7 +36,10 @@ class ConsoleWebTest {
 
     private static Order order(OrderStatus status) {
         return new Order("ORD-1048", "Priya Nair", "priya.nair@example.com", "SKU-1003", "USB-C Hub 7-in-1",
-                2, new BigDecimal("90.00"), status, PLACED, null);
+                2, new BigDecimal("90.00"), status,
+                status == OrderStatus.FAILED ? Order.SagaStep.FAILED : Order.SagaStep.CONFIRMED,
+                status == OrderStatus.FAILED ? "not enough stock" : null,
+                PLACED, null);
     }
 
     @Test

@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The failure-injection suite kills services and restarts the broker, so it takes long enough
+  # that it does not belong on every push. Run it on demand with chaos: true.
+  workflow_dispatch:
+    inputs:
+      chaos:
+        description: 'Also run the failure-injection suite (slow)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -89,3 +97,27 @@ jobs:
           name: playwright-report
           path: e2e-tests/playwright-report
           retention-days: 7
+
+  invariants:
+    name: Ordering invariants (oversell, lost orders, double charges)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cp .env.example .env
+      # Deliberately without the demo profile: it seeds twelve fixture orders by inserting them
+      # straight into the table, and they never went through the saga, so they would be reported
+      # as violations. Starting clean is what makes the check unconditional.
+      - name: Start the stack with no demo fixtures
+        run: SPRING_PROFILES_ACTIVE= docker compose up -d --build --wait
+      - name: 1,000 concurrent orders for 100 units must confirm exactly 100
+        run: |
+          ./scripts/ordering-harness.py setup --units 100
+          ./scripts/ordering-harness.py storm --orders 1000 --units 100 --concurrency 100
+      - name: Every invariant holds over the whole database
+        run: ./scripts/ordering-harness.py check
+      - name: Failure injection
+        if: ${{ inputs.chaos }}
+        run: ./scripts/chaos.sh
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=300

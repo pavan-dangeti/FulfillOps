@@ -3,7 +3,22 @@
 // /api/ops feed). This file does not invent domain concepts.
 
 export type SellerStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED';
-export type CsStatus = SellerStatus | 'REFUNDED';
+// REFUNDED and FAILED are CS-plane only: the order workflow can undo a payment, and the saga can
+// fail an order outright. Neither is something the seller plane can produce.
+export type CsStatus = SellerStatus | 'REFUNDED' | 'FAILED';
+
+/** How far the order saga got. An order is in flight until this reaches CONFIRMED or FAILED. */
+export type SagaStep =
+  | 'STARTED'
+  | 'RESERVED'
+  | 'PAID'
+  | 'ALLOCATED'
+  | 'CONFIRMED'
+  | 'FAILED';
+
+export function isSettled(step: SagaStep | null | undefined): boolean {
+  return step === 'CONFIRMED' || step === 'FAILED';
+}
 
 export interface StockItem {
   id: string;
@@ -32,6 +47,10 @@ export interface CsOrder {
   quantity: number;
   total: number;
   status: CsStatus;
+  // Optional because a source may not know: the seed replays orders from before the saga existed,
+  // and an older feed would not carry these either. Consumers must treat "absent" as unknown.
+  sagaStep?: SagaStep | null;
+  failureReason?: string | null;
   createdAt: string;
   refundedAt: string | null;
 }
@@ -59,7 +78,7 @@ export interface OpsSource {
 }
 
 export const SELLER_STATUSES: SellerStatus[] = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED'];
-export const CS_STATUSES: CsStatus[] = [...SELLER_STATUSES, 'REFUNDED'];
+export const CS_STATUSES: CsStatus[] = [...SELLER_STATUSES, 'REFUNDED', 'FAILED'];
 
 export type StoreId = 'seller' | 'cs';
 

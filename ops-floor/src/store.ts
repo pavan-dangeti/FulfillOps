@@ -1,7 +1,12 @@
 import { create } from 'zustand';
-import type { OpsSnapshot, SellerStatus, StoreId } from './data/source';
+import type { OpsSnapshot, StoreId } from './data/source';
 
-type AnyStatus = SellerStatus | 'REFUNDED';
+// A filter can be any status either plane can show. FAILED and REFUNDED belong to the CS plane;
+// the seller plane never produces either. Declared with the scene types so the UI and the scene
+// agree on one union rather than each widening its own copy.
+import type { AnyStatus } from './scene/shared';
+
+export type { AnyStatus };
 import { sceneState } from './scene/shared';
 
 export type CameraPreset = 'overview' | 'seller' | 'cs';

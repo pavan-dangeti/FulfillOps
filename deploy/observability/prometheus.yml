@@ -1,0 +1,13 @@
+# Scrapes the four services. Each exposes the same metrics under its own name, so a single set of
+# queries can be grouped by service rather than repeated four times.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: fulfillops
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["order-service:8081", "inventory-service:8082", "payment-service:8083", "fulfilment-service:8084"]
+        labels:
+          stack: fulfillops

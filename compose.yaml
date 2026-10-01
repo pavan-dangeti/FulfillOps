@@ -25,6 +25,11 @@ x-service-env: &service-env
   DB_URL: jdbc:postgresql://postgres:5432/fulfillops
   KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+  # Exported even when nothing is listening. With the observability profile off, the OTLP
+  # exporter has nowhere to send and logs a warning every export interval; there is no trace to
+  # lose, so the failure is cosmetic. `docker compose --profile observability up` starts Jaeger.
+  OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+  TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-1.0}
 
 services:
   redpanda:

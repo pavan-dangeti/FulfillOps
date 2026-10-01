@@ -221,3 +221,74 @@ the catalogue and cannot be set by a caller or by a tampered message. The order
 is still accepted when there is not enough stock, because rejecting it there would
 mean the concurrency test never exercised the reserve step that actually prevents
 overselling.
+
+## Why fulfilment capacity is a migration, not demo data
+
+Warehouse capacity used to be seeded by the `demo` profile alone. A deployment started without that
+profile could therefore accept orders, take payment for them, discover there was no slot to
+allocate, and have to refund every one — a system that only works when dressed up for a demo. The
+ordering harness caught it by running against a clean stack and confirming zero orders.
+
+Capacity is operational configuration, so it now ships in a normal migration. The simplification
+is that the numbers are fixed in SQL rather than read from configuration; a real deployment would
+set them per warehouse.
+
+**Related:** nothing decrements `on_hand` when an order ships. A shipped order still counts as
+holding its reservation. That is why the oversell invariant in `scripts/invariants.sql` is stated
+per order — "this confirmed order held its stock" — rather than as a running total of confirmed
+demand against current `on_hand`, which would be a false statement about a system whose stock
+legitimately moves.
+
+## A peer being down is 503, not 500
+
+order-service reads inventory to price an order, so inventory being down fails the request. That
+was answering 500, which tells the caller *they* did something wrong and sends them looking in the
+wrong place. `ApiErrors` maps `ResourceAccessException` to 503: the call was fine, the dependency is
+not up. Found by the failure-injection suite, which killed inventory mid-burst.
+
+## One topic, and every service reading all of it
+
+Each service's consumer group subscribes to the single `fulfillops` topic and discards the types it
+does not own. That is wasted work at scale and it is deliberate here: with one topic, re-publishing
+an event to test a duplicate is one `update` against the outbox, and the broker's per-key ordering
+is what lets the saga assume its steps arrive in sequence. Splitting into a topic per type would buy
+a little efficiency and cost a provisioning step, and would make the failure tests harder to write.
+The trade is recorded rather than hidden.
+
+## Observability is a compose profile, not part of the ordinary stack
+
+`compose.observability.yaml` adds Jaeger, Prometheus and Grafana behind the `observability` profile,
+so `docker compose up` stays a five-service system and the demo does not pay for three containers
+nobody is looking at. Grafana's dashboard is provisioned from a file in `deploy/observability/`,
+which means it is reviewable in a diff rather than being a thing someone clicked together once.
+
+Three custom metrics exist because nothing *fails* when the messaging layer goes wrong: the
+outbox just accumulates. `outbox_unpublished`, `inbox_processed_total` and `outbox_relayed_total`
+are the three numbers that would change what an operator does.
+
+**Tracing is built in the dispatcher rather than left to spring-kafka.** Record-level observation
+did not produce consumer spans in this setup, and the failure mode is the dangerous one: the outbox
+kept working, the metrics looked healthy, and there was simply no trace. Doing it explicitly in
+`EventDispatcher` puts the span boundary where the transaction boundary already is, and keeps
+working regardless of how the container is configured.
+
+The trace context is captured at write time, not at publish time, because the relay publishes on a
+later tick from a different request than the one that made the change. It rides in the event
+envelope rather than a Kafka header so the consumer can read it without depending on record
+observation being enabled.
+
+**`/actuator/prometheus` is unauthenticated**, alongside health. The scrape model has no credential
+to present, only three actuator endpoints are exposed, and each service binds to 127.0.0.1 — but a
+public deployment should still keep them behind the network.
+
+## Fulfilment capacity is the real ceiling, not stock
+
+Stock was the obvious limit, and it is not: `reserved <= on_hand` holds regardless. The binding
+constraint is warehouse capacity, because an order with no free slot cannot be fulfilled, so the
+saga fails it, refunds it and releases its stock. The first 20 orders/s load run failed **219 of
+1,200 orders** with 500,000 units of stock available, purely on slots — 981 of 1,000 were free.
+
+That is the correct outcome, and it is also a number worth stating plainly rather than tuning away:
+the load test raises capacity to fit the run, because a production deployment would size it to
+expected throughput instead. Capacity lives in a migration rather than configuration, which is the
+simplification already recorded above.
