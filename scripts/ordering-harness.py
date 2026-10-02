@@ -196,6 +196,10 @@ def command_storm(args):
         info(f"{len(UNREACHABLE)} could not be reached ({codes}) — a service was down, "
              f"so these orders were never created")
 
+    if placed == 0:
+        # Nothing reached the saga, so every check below would pass vacuously.
+        fail("no order was placed, so this run proves nothing — is the stack up?")
+
     command_settle(argparse.Namespace(timeout=args.settle_timeout))
     after = breakdown()
 
