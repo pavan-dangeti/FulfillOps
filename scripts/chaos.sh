@@ -204,10 +204,32 @@ scenario_reorder() {
   fi
 }
 
+# A share of payments declines mid-burst, so the compensation path that starts at payment runs:
+# each declined order must fail, release its stock and hold no money. Stock is plentiful here so
+# the storm can assert the exact count — every order confirms except the declined ones.
+scenario_declines() {
+  local percent=${DECLINE_PERCENT:-20} orders=${DECLINE_ORDERS:-100} declined
+  printf '\n%s\n' "--- payment declines (${percent}%) ---"
+  PAYMENT_DECLINE_PERCENT=$percent docker compose up -d --wait payment-service >/dev/null 2>&1
+  "$HARNESS" setup --sku "$SKU" --units "$orders" >/dev/null || { fail "could not reset state"; return; }
+  if "$HARNESS" storm --orders "$orders" --units "$orders" --quantity 1 --sku "$SKU" \
+      --concurrency "$CONCURRENCY" --settle-timeout "$SETTLE_TIMEOUT" >/tmp/chaos-burst.log 2>&1; then
+    declined=$(grep -oE '[0-9]+ of them for a declined payment' /tmp/chaos-burst.log | grep -oE '^[0-9]+')
+    if [ "${declined:-0}" -gt 0 ]; then
+      pass "payment declines: $declined declined order(s) failed and were compensated; the rest confirmed"
+    else
+      fail "payment declines: nothing was declined, so the path never ran"
+    fi
+  else
+    fail "payment declines: $(tail -3 /tmp/chaos-burst.log | tr '\n' ' ')"
+  fi
+  PAYMENT_DECLINE_PERCENT=0 docker compose up -d --wait payment-service >/dev/null 2>&1
+}
+
 # --- run ----------------------------------------------------------------------
 
 if [ $# -eq 0 ]; then
-  SCENARIOS="inventory payment fulfilment order broker duplicate reorder"
+  SCENARIOS="inventory payment fulfilment order broker duplicate reorder declines"
 else
   SCENARIOS="$*"
 fi
@@ -224,6 +246,7 @@ for scenario in $SCENARIOS; do
     broker)     scenario_restart_broker ;;
     duplicate)  scenario_duplicate ;;
     reorder)    scenario_reorder ;;
+    declines)   scenario_declines ;;
     *)          printf 'unknown scenario: %s\n' "$scenario" >&2; exit 2 ;;
   esac
 done
