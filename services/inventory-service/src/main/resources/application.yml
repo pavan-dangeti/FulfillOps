@@ -21,6 +21,9 @@ spring:
     default-schema: inventory_svc
     # outbox/inbox live in common, so every service gets the same messaging tables
     locations: classpath:db/migration,classpath:db/messaging
+    # A volume first started with the demo profile has V100 applied; started without it, that
+    # migration is missing locally by design rather than by accident.
+    ignore-migration-patterns: "*:missing"
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
