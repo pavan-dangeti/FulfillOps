@@ -12,6 +12,8 @@ import java.util.concurrent.Executors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -72,9 +74,10 @@ class ReservationsTest {
      * The invariant the whole system rests on: with 100 units on hand, however many orders race
      * for them, exactly 100 reservations succeed and the product is never over-reserved.
      */
-    @Test
-    void concurrentReservationsNeverOversell() throws Exception {
-        int contenders = 300;
+    // 300 is the unit-level headline; 1,000 matches the end-to-end storm, so both have a baseline.
+    @ParameterizedTest
+    @ValueSource(ints = {300, 1000})
+    void concurrentReservationsNeverOversell(int contenders) throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(16);
         try {
             List<Callable<Optional<BigDecimal>>> attempts = IntStream.range(0, contenders)
@@ -144,11 +147,11 @@ class ReservationsTest {
      * <p>Kept as a test rather than a comment so the number is measured rather than asserted from
      * memory, and so it cannot rot into a claim that no longer matches the code.
      */
-    @Test
-    void theObviousImplementationOversells() throws Exception {
-        // More contenders than units, or the naive version cannot oversell and the baseline would
-        // prove nothing — 60 orders for 100 units is a case where both versions behave.
-        int contenders = 300;
+    // More contenders than units, or the naive version cannot oversell and the baseline would prove
+    // nothing — 60 orders for 100 units is a case where both versions behave.
+    @ParameterizedTest
+    @ValueSource(ints = {300, 1000})
+    void theObviousImplementationOversells(int contenders) throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(16);
         try {
             List<Callable<Boolean>> naive = IntStream.range(0, contenders)

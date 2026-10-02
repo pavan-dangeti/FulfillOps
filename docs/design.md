@@ -99,36 +99,27 @@ idempotent effects, which yields the appearance of exactly-once without claiming
 ## How an order flows
 
 ```
-  seller                       │                     │                │              │
-    │  POST /api/orders         │                     │                │              │
-    ▼                           │                     │                │              │
-┌───────────────────────┐  reserve requested  ┌──────────────┐              │              │
-│     order-service     │────────────────────►│ inventory    │              │              │
-│  order + saga_step    │                     │ reservations │              │              │
-│  + outbox row         │◄────────────────────│              │              │              │
-│                       │  inventory.reserved │              │              │              │
-│                       │                     │              │              │              │
-│                       │────────────────────►│ payment      │              │              │
-│                       │◄────────────────────│              │              │              │
-│                       │  payment.charged    │              │              │              │
-│                       │────────────────────►│ fulfilment   │              │              │
-│                       │◄────────────────────│              │              │              │
-│  saga_step=CONFIRMED  │  fulfilment.allocated               │              │              │
-└───────────────────────┘                     └──────────────┘              │              │
-                                                                             ▼              │
-                                                            ┌──────────────────────┐      │
-                                                            │ order-service       │      │
-                                                            │ order-compensation  │      │
-                                                            │ .requested  ────────┼──────┤
-                                                            └──────────┬───────────┘      │
-                                                                       ▼                  ▼
-                                                              every service undoes its own effect
+seller    order-service                       inventory        payment       fulfilment
+  │             │                                 │               │               │
+  │─ POST ─────►│ order + reserve command         │               │               │
+  │◄─ 202 ──────│ in one transaction              │               │               │
+  │             │─ order.reserve.requested ──────►│ hold stock    │               │
+  │             │◄─ inventory.reserved ───────────┼──────────────►│ charge        │
+  │             │◄─ payment.charged ──────────────┼───────────────┼──────────────►│ claim slot
+  │             │◄─ fulfilment.allocated ─────────┼───────────────┼───────────────┤
+  │             │ CONFIRMED                       │               │               │
+  │             │                                 │               │               │
+  │             │ on any *.rejected: FAILED,      │               │               │
+  │             │ then one broadcast              │               │               │
+  │             │─ order.compensation.requested ─►┼──────────────►┼──────────────►│
+  │             │                                 │ release       │ refund        │ cancel
 ```
 
 The steps are a **choreographed saga**: no coordinator tells anyone what to do next. Each service
 listens for the event that concerns it and reacts directly — inventory to the reserve request,
 payment to the reservation, fulfilment to the charge. order-service keeps the order's own record
-honest and publishes nothing but the compensation broadcast.
+honest and publishes only two things: the reserve request that starts the saga, and the compensation
+broadcast that ends a failed one.
 
 Three properties of this shape are worth naming:
 
