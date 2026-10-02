@@ -51,21 +51,24 @@ it.
 
 | # | Result | Baseline | How it was measured | Reproduce |
 |---|---|---|---|---|
-| 1 | **300 orders for 100 units → exactly 100 reservations, 0 oversold** | **300 of 300 were told yes** — the naive check-then-write oversells 3× | 300 threads reserve 1 unit each against a product with 100 on hand | `./mvnw -pl services/inventory-service -Dtest=ReservationsTest test` |
-| 2 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected** | same naive reserve path, same 3× oversell | 1,000 concurrent HTTP orders at 100 clients, then nine cross-store invariants | `./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100` |
+| 1 | **300 orders for 100 units → exactly 100 reservations, 0 oversold** | **300 of 300 were told yes** — the naive check-then-write oversells 3× | 300 contenders on a 16-thread pool reserve 1 unit each against 100 on hand | `./mvnw -pl services/inventory-service -am -Dtest=ReservationsTest -Dsurefire.failIfNoSpecifiedTests=false test` |
+| 2 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected** | **921–969 of 1,000 were told yes** across three runs — the same check-then-write with 1,000 contenders, measured at the reservation layer rather than over HTTP | 1,000 concurrent HTTP orders at 100 clients, then nine cross-store invariants; the baseline as row 1 | `./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100` |
 | 3 | **All 7 failure scenarios hold**, 300 orders stranded mid-saga each time | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries; then the invariants | `./scripts/chaos.sh` |
 | 4 | **3,000 orders/min, end-to-end p99 3,795 ms** at 50/s offered | — | k6, Apple M5 / 10 cores / 16 GB, with k6 + 4 services + Postgres + Redpanda on that one host | `RATE=50 DURATION=2m ./scripts/load-test.sh` |
 | 5 | **1,200 orders/min, end-to-end p99 2,609 ms** at 20/s offered | — | same host, half the rate | `RATE=20 DURATION=2m ./scripts/load-test.sh` |
 | 6 | **One order, 13 spans, 4 services** in ~750 ms | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
-| 7 | 90 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
+| 7 | 93 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
 
 **On the baselines.** There is no public benchmark for a bespoke order saga, so the only honest
 baseline is the obvious implementation of the thing being fixed. Row 1 measures it: read the counter,
 check there is room, write it back — and 300 concurrent contenders for 100 units are *all* told yes,
-because every thread read the same value and decided independently. The shipped code replaces that
-with one conditional `UPDATE`, where the row lock makes a competing writer re-check against the
-committed value, and a `CHECK` constraint behind it. Rows 2–6 have no meaningful baseline and are
-reported without one.
+because each thread read a stale value and decided independently. At the storm's 1,000 contenders it
+is 921–969 told yes, varying run to run because it is a race; the same test prints the figure every
+time. The shipped code replaces that with one conditional `UPDATE`, where the row lock makes a
+competing writer re-check against the committed value, and a `CHECK` constraint behind it. Row 2's
+baseline is measured at the reservation layer, not through the HTTP harness: reproducing it end to
+end would mean shipping a code path that oversells on purpose. Rows 3–6 have no meaningful baseline
+and are reported without one.
 
 **What "end-to-end" means in rows 4 and 5**, since it is the only figure worth quoting: `POST
 /api/orders` returns 202 the moment the order and its reserve command are committed — the order is
@@ -156,7 +159,7 @@ docker compose --profile observability up -d --wait
 
 | Suite | Command |
 |---|---|
-| Services and CS console — 90 tests | `./mvnw verify` |
+| Services and CS console — 93 tests | `./mvnw verify` |
 | Seller dashboard — build, consumer contracts, formatting | `cd seller-dashboard && npx ng build && npx ng test --watch=false && npm run format:check` |
 | End to end — 15 tests, full stack per run | `cd e2e-tests && npx playwright test` |
 | Ordering invariants — the 1,000-order claim | `./scripts/ordering-harness.py storm --orders 1000` |
@@ -178,9 +181,9 @@ gh workflow run ci --ref main -f chaos=true
 Stated plainly, because a limitation you can name is better than one a reviewer finds.
 
 **The live demo is front-end only.** <https://fulfill-ops.vercel.app> runs the 3D ops floor in seed
-mode with no backend behind it. The video and the scripts are what show the real system. Hosting the
-five-service stack needs a persistent database, which no free tier provides — a real deployment
-wants roughly $5–7/month on Fly.io or Render.
+mode with no backend behind it. The video and the scripts are what show the real system. The
+constraint is compute, not storage: free Postgres exists, but five JVMs, Postgres and Redpanda need
+a few gigabytes of memory on one always-on host, which no free platform tier offers.
 
 **Payments never decline.** There is no simulated decline, so a charge cannot fail for a business
 reason. The compensation path from a payment failure is therefore unexercised, and the
