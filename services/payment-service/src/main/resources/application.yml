@@ -40,6 +40,10 @@ spring:
 fulfillops:
   security:
     jwk-set-uri: ${JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+  payment:
+    # Share of charges declined, 0-100. Off by default: the storm's exact count assumes every
+    # charge succeeds. chaos.sh's decline scenario turns it on.
+    decline-percent: ${PAYMENT_DECLINE_PERCENT:0}
 
 management:
   endpoints:

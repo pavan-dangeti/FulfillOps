@@ -134,6 +134,7 @@ services:
       DB_USER: payment_svc
       JWK_SET_URI: http://order-service:8081/.well-known/jwks.json
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
+      PAYMENT_DECLINE_PERCENT: ${PAYMENT_DECLINE_PERCENT:-0}
     ports: ["127.0.0.1:8083:8083"]
 
   fulfilment-service:

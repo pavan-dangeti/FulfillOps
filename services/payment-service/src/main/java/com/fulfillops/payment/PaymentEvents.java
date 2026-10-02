@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
 /**
  * Payment's side of the order saga. Stock is already held when a charge is requested, so the
  * amount comes from the order, not from the message: a tampered or replayed event cannot change
- * what a customer is charged. A refund it never took is not an error — compensation can arrive
+ * what a customer is charged. What is announced is the stored outcome, so a replay of a declined
+ * charge declines again. A refund it never took is not an error — compensation can arrive
  * before the charge, and asking twice must stay harmless.
  */
 @Component
@@ -45,15 +46,20 @@ public class PaymentEvents implements EventHandler {
         String sku = Event.required(event.body(), "sku");
         int quantity = Event.integer(event.body(), "quantity");
         BigDecimal amount = new BigDecimal(Event.required(event.body(), "amount"));
-        // Known limit: there is no simulated decline yet, so a charge either succeeds or the
-        // amount disagrees with what the order was created for. That second case is a caller bug
-        // and is deliberately left to propagate — catching it here would mark this transaction
+        // An amount that disagrees with an earlier charge is a caller bug, not a decline, and is
+        // deliberately left to propagate — catching it here would mark this transaction
         // rollback-only and report a programming error as a declined card.
-        payments.charge(event.orderNumber(), amount);
-        outbox.record(Event.PAYMENT_CHARGED, event.orderNumber(),
-                Event.newBody()
-                        .put("sku", sku)
-                        .put("quantity", quantity)
-                        .put("amount", amount.toPlainString()));
+        Payments.Payment payment = payments.charge(event.orderNumber(), amount);
+        switch (payment.status()) {
+            case "CHARGED" -> outbox.record(Event.PAYMENT_CHARGED, event.orderNumber(),
+                    Event.newBody()
+                            .put("sku", sku)
+                            .put("quantity", quantity)
+                            .put("amount", amount.toPlainString()));
+            case "DECLINED" -> outbox.record(Event.PAYMENT_REJECTED, event.orderNumber(),
+                    Event.newBody().put("reason", "card declined"));
+            // Refunded means the order is already dead; announcing anything would only revive it.
+            default -> { }
+        }
     }
 }
