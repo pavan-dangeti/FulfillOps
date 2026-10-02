@@ -51,7 +51,7 @@ printf '\nrun\n  %s orders/s for %s, %s units of stock, p99 budget %sms\n\n' \
   "$RATE" "$DURATION" "$UNITS" "$P99_BUDGET_MS"
 
 docker run --rm \
-  --network fulfillops_default \
+  --network "${COMPOSE_PROJECT_NAME:-fulfillops}_default" \
   -v "$PWD/scripts:/scripts:ro" \
   -e BASE_URL=http://order-service:8081 \
   -e INVENTORY_URL=http://inventory-service:8082 \
