@@ -2,6 +2,8 @@ package com.fulfillops.order;
 
 import com.fulfillops.common.Event;
 import com.fulfillops.common.Outbox;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Compares what each unsettled order claims against what its peers have actually done, and puts
@@ -42,22 +45,47 @@ public class ReconciliationJob {
     private final SagaPeers peers;
     private final Outbox outbox;
     private final Duration grace;
+    private final TransactionTemplate transactions;
+    private final Counter advancedRepairs;
+    private final Counter resumedRepairs;
+    private final Counter recompensatedRepairs;
 
     public ReconciliationJob(OrderRepository orders, SagaPeers peers, Outbox outbox,
+                             TransactionTemplate transactions, MeterRegistry registry,
                              @org.springframework.beans.factory.annotation.Value(
                                      "${fulfillops.reconciliation.grace:30s}") Duration grace) {
         this.orders = orders;
         this.peers = peers;
         this.outbox = outbox;
+        this.transactions = transactions;
         this.grace = grace;
+        this.advancedRepairs = repairs(registry, "advanced");
+        this.resumedRepairs = repairs(registry, "resumed");
+        this.recompensatedRepairs = repairs(registry, "recompensated");
+    }
+
+    private static Counter repairs(MeterRegistry registry, String action) {
+        return Counter.builder("reconciliation.repairs")
+                .tag("action", action)
+                .description("Orders reconciliation put right, by what it did")
+                .register(registry);
     }
 
     public record Report(int examined, int advanced, int resumed, int recompensated) {
     }
 
+    /**
+     * The scheduled entry point. It calls reconcile() on this object, which Spring's proxy never
+     * sees, so the annotation on reconcile() does nothing here and the transaction is opened
+     * explicitly; without it an advanced order is changed in memory and never saved. Repairs are
+     * counted after the commit, so a pass that rolls back is not reported as work done.
+     */
     @Scheduled(fixedDelayString = "${fulfillops.reconciliation.interval-ms:60000}")
     public void run() {
-        Report report = reconcile();
+        Report report = transactions.execute(status -> reconcile());
+        advancedRepairs.increment(report.advanced());
+        resumedRepairs.increment(report.resumed());
+        recompensatedRepairs.increment(report.recompensated());
         if (report.examined() > 0) {
             log.info("reconciliation examined {} unsettled order(s): advanced {}, resumed {}, recompensated {}",
                     report.examined(), report.advanced(), report.resumed(), report.recompensated());
