@@ -40,12 +40,14 @@ printf '  k6 client, 4 Spring Boot services, Postgres and Redpanda all on this o
 # Fulfilment capacity is a hard bound: an order with no free slot fails, and the demo warehouses
 # hold 1000 slots between them. At 20 orders/s a two-minute run needs 2400, so capacity is raised
 # to fit the run. This is a harness provisioning step, not something the system does for itself —
-# a real deployment would size capacity to expected throughput.
+# a real deployment would size capacity to expected throughput. The room is added on top of what is
+# already allocated, because confirmed orders keep their slots and a second run would otherwise
+# find the warehouses full.
 EXPECTED=$(( RATE * (DURATION_SECONDS=${DURATION_SECONDS:-120}) ))
 CAPACITY=$(( EXPECTED + 1000 ))
 docker compose exec -T postgres psql -U postgres -d fulfillops -q -c \
-  "update fulfilment_svc.warehouses set capacity = $CAPACITY" >/dev/null 2>&1
-printf '  fulfilment capacity raised to %s slots for this run\n' "$CAPACITY"
+  "update fulfilment_svc.warehouses set capacity = allocated + $CAPACITY" >/dev/null 2>&1
+printf '  fulfilment capacity: %s free slots per warehouse for this run\n' "$CAPACITY"
 
 printf '\nrun\n  %s orders/s for %s, %s units of stock, p99 budget %sms\n\n' \
   "$RATE" "$DURATION" "$UNITS" "$P99_BUDGET_MS"
