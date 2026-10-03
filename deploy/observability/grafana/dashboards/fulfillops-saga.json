@@ -242,6 +242,76 @@
           "legendFormat": "{{application}}"
         }
       ]
+    },
+    {
+      "type": "stat",
+      "title": "Dead-lettered events",
+      "datasource": null,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
+      "description": "Events a handler could not process, set aside on fulfillops.dlt. Anything above zero needs a look.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": null,
+          "expr": "sum(messaging_dead_lettered_total) or vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Reconciliation repairs (per 5 min)",
+      "datasource": null,
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 8,
+        "y": 27
+      },
+      "description": "Orders reconciliation put right, by what it did. Normally flat at zero: redelivery repairs almost everything first.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": null,
+          "expr": "sum(increase(reconciliation_repairs_total[5m])) by (action)",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
     }
   ]
 }

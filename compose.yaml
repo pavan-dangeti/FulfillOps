@@ -196,6 +196,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
       - promdata:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
