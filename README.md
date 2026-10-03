@@ -53,11 +53,11 @@ it.
 |---|---|---|---|---|
 | 1 | **300 orders for 100 units → exactly 100 reservations, 0 oversold** | **300 of 300 were told yes** — the naive check-then-write oversells 3× | 300 contenders on a 16-thread pool reserve 1 unit each against 100 on hand | `./mvnw -pl services/inventory-service -am -Dtest=ReservationsTest -Dsurefire.failIfNoSpecifiedTests=false test` |
 | 2 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected** | **921–969 of 1,000 were told yes** across three runs — the same check-then-write with 1,000 contenders, measured at the reservation layer rather than over HTTP | 1,000 concurrent HTTP orders at 100 clients, then nine cross-store invariants; the baseline as row 1 | `./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100` |
-| 3 | **All 7 failure scenarios hold**, 300 orders stranded mid-saga each time | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries; then the invariants | `./scripts/chaos.sh` |
-| 4 | **3,000 orders/min, end-to-end p99 3,795 ms** at 50/s offered | — | k6, Apple M5 / 10 cores / 16 GB, with k6 + 4 services + Postgres + Redpanda on that one host | `RATE=50 DURATION=2m ./scripts/load-test.sh` |
-| 5 | **1,200 orders/min, end-to-end p99 2,609 ms** at 20/s offered | — | same host, half the rate | `RATE=20 DURATION=2m ./scripts/load-test.sh` |
+| 3 | **All 9 failure scenarios hold**, 300 orders stranded mid-saga in each crash | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries, 20% of payments declined, a poison message; then the invariants | `./scripts/chaos.sh` |
+| 4 | **~2,980 orders/min, end-to-end p99 1,448–1,526 ms** at 50/s offered; a third run hit a 15 s broker stall (p99 15,907 ms) | — | k6, three runs, Apple M5 / 10 cores / 16 GB, with k6 + 4 services + Postgres + Redpanda on that one host | `RATE=50 DURATION=2m ./scripts/load-test.sh` |
+| 5 | **1,200 orders/min, end-to-end p99 1,118–1,172 ms** at 20/s offered | — | same host, three runs | `RATE=20 DURATION=2m ./scripts/load-test.sh` |
 | 6 | **One order, 13 spans, 4 services** in ~750 ms | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
-| 7 | 93 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
+| 7 | 99 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
 
 **On the baselines.** There is no public benchmark for a bespoke order saga, so the only honest
 baseline is the obvious implementation of the thing being fixed. Row 1 measures it: read the counter,
@@ -74,9 +74,10 @@ and are reported without one.
 /api/orders` returns 202 the moment the order and its reserve command are committed — the order is
 not fulfilled then. The number is from the client's POST to its first observation of a terminal
 `sagaStep`, polled every 200 ms, so that granularity is up to 200 ms of every figure and flatters the
-p99 slightly. The bare POST is 58 ms p99 at 50/s.
+p99 slightly. The bare POST is 225–300 ms p99 at 50/s.
 
-Full detail, including every failure scenario and what the recovery actually was:
+Full detail, including every failure scenario, a correction to the first published chaos results,
+the stalled load-test run and the memory measurements:
 [`docs/ordering-invariants.md`](docs/ordering-invariants.md) and [`docs/performance.md`](docs/performance.md).
 
 ---
@@ -159,7 +160,7 @@ docker compose --profile observability up -d --wait
 
 | Suite | Command |
 |---|---|
-| Services and CS console — 93 tests | `./mvnw verify` |
+| Services and CS console — 99 tests | `./mvnw verify` |
 | Seller dashboard — build, consumer contracts, formatting | `cd seller-dashboard && npx ng build && npx ng test --watch=false && npm run format:check` |
 | End to end — 15 tests, full stack per run | `cd e2e-tests && npx playwright test` |
 | Ordering invariants — the 1,000-order claim | `./scripts/ordering-harness.py storm --orders 1000` |
@@ -185,14 +186,10 @@ mode with no backend behind it. The video and the scripts are what show the real
 constraint is compute, not storage: free Postgres exists, but five JVMs, Postgres and Redpanda need
 a few gigabytes of memory on one always-on host, which no free platform tier offers.
 
-**Payments never decline.** There is no simulated decline, so a charge cannot fail for a business
-reason. The compensation path from a payment failure is therefore unexercised, and the
-one-charge-per-order rule has only been tested against duplicates, not declines. This is the
-largest realism gap in the system.
-
-**No dead-letter topic.** A message a handler cannot process is retried by the broker and then
-dropped silently. Ordering still holds — reconciliation is the net — but nothing pages anyone. A
-dead-letter topic is the right answer and is not built.
+**Declines are simulated, and nothing pages anyone.** A configured share of payments declines,
+decided by a hash of the order number, which exercises the compensation path but not the timeouts
+and late successes of a real processor. Dead letters and a stalled outbox raise Prometheus alerts,
+but no Alertmanager is configured, so the alerts are visible and go nowhere.
 
 **Nothing consumes stock on despatch.** A shipped order still counts as holding its reservation, so
 the oversell invariant is stated per order rather than as a running total. See
@@ -211,7 +208,9 @@ ones, and re-announces a still-incomplete one every pass. Safe because every con
 unbounded in cost.
 
 **One host, one Postgres, one broker node.** No partitions, no replication, no multi-region, no
-failover. The oversell guarantee is enforced by the database and reproduced on a second machine, but
+failover. One broker is a single point of stall as well as of failure: in one of six load-test runs
+every service's sends to it timed out together for about 15 seconds. Nothing was lost, but nothing
+moved. The oversell guarantee is enforced by the database and reproduced on a second machine, but
 the throughput numbers are a property of one laptop.
 
 **Tracing was sampled at 100%** during the load test, so the exporter's cost is *inside* those
