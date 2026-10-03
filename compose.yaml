@@ -30,6 +30,8 @@ x-service-env: &service-env
   # lose, so the failure is cosmetic. `docker compose --profile observability up` starts Jaeger.
   OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
   TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-1.0}
+  # Empty by default; scripts/memory-profile.sh sets it to turn on native memory tracking.
+  JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:-}
 
 services:
   redpanda:
