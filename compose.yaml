@@ -9,10 +9,13 @@ x-jvm-service: &jvm-service
       condition: service_healthy
     redpanda:
       condition: service_healthy
+  # Sized from scripts/memory-profile.sh, not guessed: under load a saga service's non-heap memory
+  # (class metadata, code cache, threads, native) reaches ~350-400 MB, so 512m left no room for a
+  # heap that grew. See docs/performance.md, "Memory".
   deploy:
     resources:
       limits:
-        memory: 512m
+        memory: 768m
   healthcheck:
     # bash's /dev/tcp instead of curl, which the JRE image doesn't guarantee
     test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/$$SERVER_PORT && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
@@ -162,6 +165,10 @@ services:
     <<: *jvm-service
     build: { context: ., args: { MODULE: cs-console } }
     image: fulfillops/cs-console:dev
+    deploy:
+      resources:
+        limits:
+          memory: 512m   # no broker, no saga: it peaks near 230 MB
     depends_on:
       order-service:
         condition: service_healthy

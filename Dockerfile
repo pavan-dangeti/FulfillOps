@@ -24,4 +24,10 @@ FROM eclipse-temurin:21-jre
 RUN useradd --system --uid 10001 --no-create-home app
 COPY --from=build /app.jar /app/app.jar
 USER app
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+# Measured, not defaulted (docs/performance.md, "Memory"). glibc gives each thread that allocates
+# its own arena, which showed up as ~100-140 MB of native memory the JVM does not account for; two
+# arenas is plenty for a service this size. The heap is a third of the container because class
+# metadata, code cache and native memory take most of the rest — at 75%, a heap that actually grew
+# to its maximum could not fit beside them.
+ENV MALLOC_ARENA_MAX=2
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=33", "-jar", "/app/app.jar"]
