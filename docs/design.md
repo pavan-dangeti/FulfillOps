@@ -57,8 +57,8 @@ Stated so the boundaries are visible rather than implied:
 
 - **Not production-grade scale.** One host, one Postgres, one broker node. No partitions, no
   replication, no multi-region. The load numbers are an upper bound for a single machine.
-- **No real payments.** "Payment" is a row with a unique order number. No card network, no
-  decline path, no partial refunds.
+- **No real payments.** "Payment" is a row with a unique order number. Declines are simulated at
+  a configured rate; there is no card network and no partial refund.
 - **No multi-tenancy, no per-customer authorisation.** Roles are SELLER, CS, OPS and INTERNAL.
 - **Not a general workflow engine.** The saga is four steps and is written as four steps.
 - **No blue/green deploys, no schema evolution tooling** beyond numbered Flyway migrations.
@@ -192,9 +192,27 @@ hold and repairs in a defined direction — the order is the *intent*, a peer's 
 
 ### What happens when a consumer cannot cope
 
-A message a handler cannot process is retried by the broker and then **dropped**. Nothing reports
-it; only reconciliation would notice. This is a real gap and the most likely one to matter in
-production. A dead-letter topic is the right answer and is not built.
+A message a handler cannot process is retried four times, a second apart — enough for a database
+that is briefly away — and then **published to `fulfillops.dlt`** with the exception in its
+headers, counted in `messaging_dead_lettered_total` and logged at ERROR. An unreadable message
+skips the retries, because retrying cannot fix it. The partition does not stall: orders behind a
+poison message carry on, which `chaos.sh poison` checks.
+
+The dead-lettered record keeps its key, the order number. That matters for the replay: once the
+cause is fixed, putting the record back on the main topic lands it in its order's partition again,
+and the consumers' idempotency makes a second delivery harmless.
+
+```bash
+# what was set aside, and why: each record as JSON, with the consumer group that failed and the
+# exception in its kafka_dlt-* headers
+docker compose exec redpanda rpk topic consume fulfillops.dlt -o start -n 10
+# after fixing the cause: replay everything onto the main topic
+docker compose exec redpanda sh -c \
+  "rpk topic consume fulfillops.dlt -o start -n \$N -f '%k\t%v\n' | rpk topic produce fulfillops -f '%k\t%v\n'"
+```
+
+An order whose event was dead-lettered is not lost in the meantime: it is stranded at its last
+step, and reconciliation re-sends the command that moves it on.
 
 ---
 
@@ -291,7 +309,6 @@ The full list is in [`../TRADEOFFS.md`](../TRADEOFFS.md). The ones that cost som
   makes failure injection a single `UPDATE`.
 - **Warehouse capacity is a migration, not configuration.** Real deployments need it to be
   configurable; here it is a hardcoded number a test harness has to patch.
-- **No dead-letter topic.** A poison message is dropped silently after retries.
 - **The signing key is generated at startup**, so order-service cannot run as several replicas and a
   restart invalidates issued tokens.
 
@@ -301,11 +318,10 @@ The full list is in [`../TRADEOFFS.md`](../TRADEOFFS.md). The ones that cost som
 
 Ordered by how likely they are to matter, with what to do about each.
 
-**1. A dropped message is invisible.** *High likelihood, high impact.* After retries a message a
-handler cannot process is discarded with nothing to show for it. Ordering still holds — reconciliation
-is the net — but the order may sit unfinished until the next reconciliation pass, and nothing pages
-anyone. *Mitigation: a dead-letter topic, and an alert on `outbox_unpublished` not returning to zero
-plus `inbox_processed_total` stalling on one service.*
+**1. Nobody is paged.** *High likelihood, medium impact.* A dead-lettered event and an outbox that
+stops draining both raise a Prometheus alert (`deploy/observability/alerts.yml`), but no
+Alertmanager is configured, so the alert is visible on Prometheus's alerts page and goes nowhere
+else. *Mitigation: an Alertmanager route to whatever pages the on-call.*
 
 **2. Fulfilment capacity is a hard, silent ceiling.** *Certain to be hit.* The load test found 219 of
 1,200 orders failing on slots with 500,000 units in stock. The system behaved correctly — no slot
@@ -330,9 +346,11 @@ replication is not configured. *Mitigation: a second broker and replication, or 
 and the load test ran on one host. The oversell guarantee is enforced by the database and is
 hardware-independent — it reproduced on a second machine — but the throughput numbers are not.
 
-**7. Payments never decline.** *Certain, high impact for realism.* The payment step cannot fail for a
-business reason, so the compensation path from a payment failure is unexercised and the "one charge
-per order" rule has only been tested against duplicates, not declines.
+**7. Declines are a hash, not a card network.** *Certain, low impact.* A configured share of
+orders declines, decided from the order number so a retry gets the same answer. That exercises
+the compensation path from payment end to end (`chaos.sh declines`), but a real processor adds
+timeouts, soft declines and charges that succeed after the client gave up, none of which are
+modelled.
 
 **8. The end-to-end latency figures are client-measured.** *Certain, low impact.* They come from the
 k6 client polling `GET /api/orders/{n}` every 200 ms, so each figure carries up to 200 ms of
