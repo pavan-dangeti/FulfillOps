@@ -185,7 +185,6 @@ def command_storm(args):
     if settle_first:
         info(f"waiting for {settle_first} pre-existing order(s) in flight to settle")
         command_settle(argparse.Namespace(timeout=args.settle_timeout))
-    sql(f"update order_svc.outbox set published_at = null")  # everything re-published once, harmlessly
 
     started = time.time()
     # The window opens on the database's clock, the one created_at is stamped with, so no order
@@ -371,10 +370,13 @@ def check(since=None):
 
 
 def fixture_orders():
-    """Orders the demo profile inserted directly, which never went through the saga."""
+    """Orders the demo profile inserted directly, which never went through the saga.
+
+    An order placed through the API writes its reserve command in the same transaction, so an
+    order with no outbox event at all can only have been inserted straight into the table.
+    """
     return count("""select count(*) from order_svc.orders o
-                    left join payment_svc.payments p on p.order_number = o.order_number
-                    where p.order_number is null and o.created_at < now() - interval '10 minutes'""")
+                    where not exists (select 1 from order_svc.outbox e where e.order_number = o.order_number)""")
 
 
 def main():
