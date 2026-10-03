@@ -294,8 +294,18 @@ def command_inject(args):
 
     Clearing `published_at` makes the relay send the row again, which is a real
     duplicate delivery rather than a simulated one. For `reorder` the oldest event
-    of an order is re-announced after the ones that followed it, so it arrives late.
+    of an order is re-announced after the ones that followed it, so it arrives late. `poison`
+    publishes something that is not an event at all, straight to the broker, so every consumer
+    has to set it aside without stalling the orders behind it.
     """
+    if args.mode == "poison":
+        result = subprocess.run(["docker", "compose", "exec", "-T", "redpanda", "rpk", "topic", "produce",
+                                 "fulfillops", "-k", args.order], input="this is not an event\n",
+                                cwd=ROOT, capture_output=True, text=True)
+        if result.returncode != 0:
+            fail(f"could not publish: {result.stderr.strip()}")
+        ok(f"published an unreadable message keyed {args.order}")
+        return
     if args.mode == "duplicate":
         rows = sql(f"""select o.event_id, o.type from order_svc.outbox o
                        where o.order_number = '{args.order}' and o.published_at is not null
@@ -401,7 +411,7 @@ def main():
     check_parser.set_defaults(run=command_check)
 
     inject = sub.add_parser("inject", help="re-publish events, to test redelivery")
-    inject.add_argument("mode", choices=["duplicate", "reorder"])
+    inject.add_argument("mode", choices=["duplicate", "reorder", "poison"])
     inject.add_argument("--order", required=True)
     inject.add_argument("--count", type=int, default=1)
     inject.set_defaults(run=command_inject)
