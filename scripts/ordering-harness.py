@@ -129,7 +129,8 @@ UNREACHABLE = []
 # --- commands ------------------------------------------------------------------
 
 def command_setup(args):
-    """Creates the product the storm orders against, or restocks it so exactly `units` are free.
+    """Creates the product the storm orders against, or restocks it so exactly `units` are free,
+    and gives the warehouses room for them.
 
     Confirmed orders keep their reservations (nothing consumes stock on despatch), so setting
     on-hand to `units` after an earlier run would leave nothing available and every order of the
@@ -153,6 +154,9 @@ def command_setup(args):
         with urllib.request.urlopen(request, timeout=10):
             pass
         info(f"{args.sku} already existed; {held} unit(s) still held by earlier orders")
+    # Confirmed orders also keep their warehouse slots, so a stack that has confirmed enough orders
+    # fails every new one on capacity. Make sure this run's units have somewhere to go.
+    sql(f"update fulfilment_svc.warehouses set capacity = greatest(capacity, allocated + {args.units})")
     print(f"ok    product {args.sku} ready with {args.units} unit(s) available")
 
 
