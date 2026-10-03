@@ -204,10 +204,60 @@ scenario_reorder() {
   fi
 }
 
+# A share of payments declines mid-burst, so the compensation path that starts at payment runs:
+# each declined order must fail, release its stock and hold no money. Stock is plentiful here so
+# the storm can assert the exact count — every order confirms except the declined ones.
+scenario_declines() {
+  local percent=${DECLINE_PERCENT:-20} orders=${DECLINE_ORDERS:-100} declined
+  printf '\n%s\n' "--- payment declines (${percent}%) ---"
+  PAYMENT_DECLINE_PERCENT=$percent docker compose up -d --wait payment-service >/dev/null 2>&1
+  "$HARNESS" setup --sku "$SKU" --units "$orders" >/dev/null || { fail "could not reset state"; return; }
+  if "$HARNESS" storm --orders "$orders" --units "$orders" --quantity 1 --sku "$SKU" \
+      --concurrency "$CONCURRENCY" --settle-timeout "$SETTLE_TIMEOUT" >/tmp/chaos-burst.log 2>&1; then
+    declined=$(grep -oE '[0-9]+ of them for a declined payment' /tmp/chaos-burst.log | grep -oE '^[0-9]+')
+    if [ "${declined:-0}" -gt 0 ]; then
+      pass "payment declines: $declined declined order(s) failed and were compensated; the rest confirmed"
+    else
+      fail "payment declines: nothing was declined, so the path never ran"
+    fi
+  else
+    fail "payment declines: $(tail -3 /tmp/chaos-burst.log | tr '\n' ' ')"
+  fi
+  PAYMENT_DECLINE_PERCENT=0 docker compose up -d --wait payment-service >/dev/null 2>&1
+}
+
+# Messages on the dead-letter topic: the sum of its partitions' high watermarks.
+dead_lettered() {
+  docker compose exec -T redpanda rpk topic describe fulfillops.dlt -p 2>/dev/null \
+    | awk 'NR > 1 { sum += $NF } END { print sum + 0 }'
+}
+
+# A message no consumer can read. Each of the four services' consumers must set it aside on the
+# dead-letter topic rather than drop it or stall behind it, and orders placed afterwards must
+# still go through exactly.
+scenario_poison() {
+  local before after
+  printf '\n%s\n' "--- poison message ---"
+  before=$(dead_lettered)
+  "$HARNESS" inject poison --order ORD-POISON >/dev/null || { fail "poison message: could not publish"; return; }
+  sleep 15
+  after=$(dead_lettered)
+  note "dead-letter topic: $before -> $after message(s)"
+  reset_state
+  if ! "$HARNESS" storm --orders "$ORDERS" --units "$UNITS" --quantity 1 --sku "$SKU" \
+      --concurrency "$CONCURRENCY" --settle-timeout "$SETTLE_TIMEOUT" >/tmp/chaos-burst.log 2>&1; then
+    fail "poison message: orders after it did not go through: $(tail -2 /tmp/chaos-burst.log | tr '\n' ' ')"
+  elif [ $((after - before)) -ne 4 ]; then
+    fail "poison message: expected one dead letter per consuming service (4), got $((after - before))"
+  else
+    pass "poison message: all 4 consumers dead-lettered it, and the next burst went through exactly"
+  fi
+}
+
 # --- run ----------------------------------------------------------------------
 
 if [ $# -eq 0 ]; then
-  SCENARIOS="inventory payment fulfilment order broker duplicate reorder"
+  SCENARIOS="inventory payment fulfilment order broker duplicate reorder declines poison"
 else
   SCENARIOS="$*"
 fi
@@ -224,6 +274,8 @@ for scenario in $SCENARIOS; do
     broker)     scenario_restart_broker ;;
     duplicate)  scenario_duplicate ;;
     reorder)    scenario_reorder ;;
+    declines)   scenario_declines ;;
+    poison)     scenario_poison ;;
     *)          printf 'unknown scenario: %s\n' "$scenario" >&2; exit 2 ;;
   esac
 done

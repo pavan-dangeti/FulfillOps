@@ -82,9 +82,9 @@ developer-machine run, and the command is the same.
 | **The same, on a different machine: 100 confirmed, 900 failed** | the `invariants` CI job (ubuntu-latest) |
 | 1,000 orders placed in 2.1 s at 100 concurrent clients (~450/s) | same storm run, reported in its output |
 | 1,000 orders placed in 9.0 s at 100 concurrent clients (~111/s) | same storm run on the CI runner |
-| 300 orders race for 100 units in-process → exactly 100 reservations | `./mvnw -pl services/inventory-service -Dtest=ReservationsTest test` |
-| A duplicated message produces one effect and one inbox row | `./mvnw -pl services/order-service -Dtest=OrderSagaFlowTest test` |
-| Every reconciliation repair direction (8 cases) | `./mvnw -pl services/order-service -Dtest=ReconciliationJobTest test` |
+| 300 and 1,000 orders race for 100 units in-process → exactly 100 reservations | `./mvnw -pl services/inventory-service -am -Dtest=ReservationsTest -Dsurefire.failIfNoSpecifiedTests=false test` |
+| A duplicated message produces one effect and one inbox row | `./mvnw -pl services/order-service -am -Dtest=OrderSagaFlowTest -Dsurefire.failIfNoSpecifiedTests=false test` |
+| Every reconciliation repair direction, and the scheduled path that saves them (10 cases) | `./mvnw -pl services/order-service -am -Dtest=ReconciliationJobTest -Dsurefire.failIfNoSpecifiedTests=false test` |
 
 **The correctness result is the same on both machines; the rate is not** — ~450/s on an Apple
 Silicon laptop sharing the machine with all four services, ~111/s on a CI runner. That gap is the
@@ -104,36 +104,65 @@ could pass by the damage landing outside the saga and meaning nothing.
 
 | Scenario | Damage | Peak stranded | Result |
 |---|---|---|---|
-| `inventory` | `SIGKILL` inventory-service | 300 | all invariants held |
-| `payment` | `SIGKILL` payment-service | 300 | all invariants held |
-| `fulfilment` | `SIGKILL` fulfilment-service | 300 | all invariants held |
-| `order` | `SIGKILL` order-service | 300 | all invariants held |
-| `broker` | `docker compose restart redpanda` | 300 | all invariants held |
+| `inventory` | `SIGKILL` inventory-service | 300 | exactly 100 confirmed, all invariants held |
+| `payment` | `SIGKILL` payment-service | 300 | exactly 100 confirmed, all invariants held |
+| `fulfilment` | `SIGKILL` fulfilment-service | 300 | exactly 100 confirmed, all invariants held |
+| `order` | `SIGKILL` order-service | 300 | exactly 100 confirmed, all invariants held |
+| `broker` | `docker compose restart redpanda` | 300 | exactly 100 confirmed, all invariants held |
 | `duplicate` | 30 events re-published for 10 confirmed orders | — | nothing changed |
 | `reorder` | each order's first event re-announced after its last | — | nothing changed |
+| `declines` | 20% of payments declined, 100 orders for 100 units | — | 21–34 declined per run; each failed and was compensated, every other order confirmed |
+| `poison` | an unreadable message published to the topic | — | dead-lettered once by each of the 4 consumers; the next burst confirmed exactly 100 |
+
+Reproduce with `./scripts/chaos.sh`, or one scenario with `./scripts/chaos.sh declines`. The table is
+from three full runs on fresh stacks (Apple M5, 10 cores, Docker with 8 GB), each after a storm and
+one or three k6 runs had loaded the stack, before and after the memory tuning in
+[`performance.md`](performance.md). All three passed every scenario. A fourth run, made before the
+last harness fix below, failed three scenarios; that failure is explained there.
 
 `SIGKILL` rather than `SIGTERM`: no shutdown hook, no flush, nothing given a chance to tidy up.
 
 The duplicate and reorder scenarios re-publish real events by clearing `published_at`, so the relay
-sends them again — a genuine redelivery, not a simulated one. That it changed nothing was checked
-directly, not inferred: after re-publishing, the product's `reserved` counter was still 100 and
-still equalled the ledger (a re-reserve would have made it 102), and the inbox held 7,848 rows
-across 7,848 distinct events, so no event was ever applied twice.
+sends them again — a genuine redelivery, not a simulated one.
 
-### How the system recovered, honestly
+The decline count varies because the declined orders are a hash of the order number, and order
+numbers continue from earlier runs on the same stack. With stock to spare, the storm can assert the
+exact answer: every order confirms except the declined ones.
 
-In every crash scenario, reconciliation reported **zero repairs** — it examined the stranded
-orders and found nothing to do. Recovery came from the broker redelivering uncommitted messages,
-with the inbox absorbing the repeats.
+### A correction to earlier results
 
-That is a real result and a weaker one than "the reconciliation job saved it". The outbox plus
-at-least-once delivery is the mechanism doing the work here. Reconciliation is the second line for
-the cases redelivery cannot cover, and this harness did not produce one. It is covered by unit
-tests instead (`ReconciliationJobTest`), which drive each repair direction directly.
+The failure-injection results first published here were measured with a harness that had two bugs,
+found while adding the decline scenario:
 
-One gap this suite does not reach: an event a handler cannot process is retried by the broker and
-then dropped. A dead-letter topic would be the proper answer, and nothing here would notice the
-loss except reconciliation.
+- `setup` set the product's on-hand stock to the requested units, but confirmed orders keep their
+  reservations, so after the first burst on a stack no units were free. Every later burst was
+  rejected at the reserve step.
+- `storm` counted every confirmed order for the product, not only the ones from its own run, so an
+  earlier run's 100 confirmations satisfied "exactly 100 confirmed".
+
+So on a shared stack, the scenarios after the first exercised crash recovery on the rejection path
+only: orders were stranded mid-saga, but never mid-payment or mid-allocation. Both bugs are fixed —
+`setup` restocks and makes warehouse room on top of what earlier runs hold, and `storm` counts only
+its own run — and the table above is from the corrected harness, where every crash scenario has
+orders confirming through all four services.
+
+Fixing them exposed a third. `storm` began by marking every event order-service had ever written as
+unpublished, as a built-in redelivery test. Harmless to correctness, but on a stack that had taken
+~15,000 orders it put tens of thousands of re-sends ahead of each burst's own events, and the
+duplicate, reorder and poison bursts could not settle within 240 s. The redelivery it was meant to
+test is what the `duplicate` and `reorder` scenarios test properly, so the line is gone.
+
+### How the system recovered
+
+Recovery in the crash scenarios comes from the broker redelivering uncommitted messages, with the
+inbox absorbing the repeats. Reconciliation is the second line, for what redelivery cannot cover.
+
+It also had a bug that the crash scenarios could not have shown. Its scheduled entry point called
+the transactional method on itself, past Spring's proxy, so in production the transaction never
+opened: an order it *advanced* to match its peers was changed in memory and never saved. Its other
+two repairs — re-sending a command and asking again for compensation — insert an outbox row, which
+commits on its own, so they always worked. `ReconciliationJobTest` now goes in through the scheduled
+path and reloads the order, and each repair is counted in `reconciliation_repairs_total{action}`.
 
 ---
 
@@ -155,9 +184,8 @@ you got.
 
 ## What this does not prove
 
-- **Payments are never declined.** There is no simulated decline, so a charge cannot fail for
-  business reasons. The payment-triggered compensation path is unexercised; only inventory and
-  fulfilment refusals have been driven end to end.
+- **Declines are a hash, not a processor.** The `declines` scenario drives compensation from a
+  payment failure end to end, but not a processor's timeouts or late successes.
 - **No latency or throughput claim.** Placement rate above is an observation on a shared laptop.
 - **Single region, single Postgres, one broker node.** Nothing here says anything about partitions,
   replication or failover across availability zones.

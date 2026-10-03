@@ -85,6 +85,12 @@ def token():
     return _token
 
 
+def get(path, base=ORDER_SERVICE):
+    request = urllib.request.Request(f"{base}{path}", headers={"Authorization": f"Bearer {token()}"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
 def post(path, payload, base=ORDER_SERVICE):
     request = urllib.request.Request(f"{base}{path}", data=json.dumps(payload).encode(),
                                      headers={"Content-Type": "application/json",
@@ -123,7 +129,14 @@ UNREACHABLE = []
 # --- commands ------------------------------------------------------------------
 
 def command_setup(args):
-    """Creates the product the storm orders against, or resets its stock if it is already there."""
+    """Creates the product the storm orders against, or restocks it so exactly `units` are free,
+    and gives the warehouses room for them.
+
+    Confirmed orders keep their reservations (nothing consumes stock on despatch), so setting
+    on-hand to `units` after an earlier run would leave nothing available and every order of the
+    next run would be refused at the reserve step. Restocking on top of what is held keeps each
+    run's starting point the same.
+    """
     try:
         post("/api/products", {"sku": args.sku, "name": "Invariant Widget",
                                "unitPrice": "10.00", "stock": args.units}, base=INVENTORY_SERVICE)
@@ -132,15 +145,19 @@ def command_setup(args):
             raise
         # Already exists from an earlier run: reset the stock instead, so the run starts
         # from a known level without needing the database touched.
+        held = get(f"/api/products/{args.sku}", base=INVENTORY_SERVICE)["reserved"]
         request = urllib.request.Request(
             f"{INVENTORY_SERVICE}/api/products/{args.sku}/stock",
-            data=json.dumps({"stock": args.units}).encode(),
+            data=json.dumps({"stock": held + args.units}).encode(),
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {token()}"},
             method="PUT")
         with urllib.request.urlopen(request, timeout=10):
             pass
-        info(f"{args.sku} already existed; stock reset to {args.units}")
-    print(f"ok    product {args.sku} ready with {args.units} unit(s) on hand")
+        info(f"{args.sku} already existed; {held} unit(s) still held by earlier orders")
+    # Confirmed orders also keep their warehouse slots, so a stack that has confirmed enough orders
+    # fails every new one on capacity. Make sure this run's units have somewhere to go.
+    sql(f"update fulfilment_svc.warehouses set capacity = greatest(capacity, allocated + {args.units})")
+    print(f"ok    product {args.sku} ready with {args.units} unit(s) available")
 
 
 def command_settle(args):
@@ -168,10 +185,11 @@ def command_storm(args):
     if settle_first:
         info(f"waiting for {settle_first} pre-existing order(s) in flight to settle")
         command_settle(argparse.Namespace(timeout=args.settle_timeout))
-    sql(f"update order_svc.outbox set published_at = null")  # everything re-published once, harmlessly
 
     started = time.time()
-    since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    # The window opens on the database's clock, the one created_at is stamped with, so no order
+    # from this run can fall outside it and no order from an earlier run can fall inside.
+    since = sql("select now()")[0][0]
     placed = 0
     refused = 0
     del UNREACHABLE[:]
@@ -206,29 +224,50 @@ def command_storm(args):
     # Scoped to the product under test: the database may hold orders from earlier runs, and the
     # claim is about this one product's units, not about every order ever placed.
     confirmed_units = count(f"select coalesce(sum(quantity),0) from order_svc.orders "
-                            f"where saga_step = 'CONFIRMED' and sku = '{args.sku}'")
+                            f"where saga_step = 'CONFIRMED' and sku = '{args.sku}' and created_at >= '{since}'")
     confirmed_orders = count(f"select count(*) from order_svc.orders "
-                             f"where saga_step = 'CONFIRMED' and sku = '{args.sku}'")
+                             f"where saga_step = 'CONFIRMED' and sku = '{args.sku}' and created_at >= '{since}'")
     rejected = count(f"select count(*) from order_svc.orders "
-                     f"where saga_step = 'FAILED' and sku = '{args.sku}'")
+                     f"where saga_step = 'FAILED' and sku = '{args.sku}' and created_at >= '{since}'")
+    declined = count(f"select count(*) from payment_svc.payments p "
+                     f"join order_svc.orders o on o.order_number = p.order_number "
+                     f"where p.status = 'DECLINED' and o.sku = '{args.sku}' and o.created_at >= '{since}'")
     print()
     info(f"confirmed: {confirmed_orders} order(s) / {confirmed_units} unit(s) for {args.sku}")
-    info(f"rejected:  {rejected} order(s) for want of stock")
+    info(f"rejected:  {rejected} order(s), {declined} of them for a declined payment")
     info(f"database:  {describe(after)} (all products)")
+
+    # The exact answer depends on what limited the run. With stock to spare, every order should
+    # confirm except the declined ones. With stock contended and nothing declined, stock is the only
+    # limit. With both, a decline releases units that an order already refused for stock never
+    # sees, so the count depends on timing and only "no oversell, every invariant" can be claimed.
+    demand = placed * args.quantity
+    if demand <= args.units:
+        expected = demand - declined * args.quantity
+    elif declined == 0:
+        expected = args.units
+    else:
+        expected = None
 
     violations = check(since=since)
     if confirmed_units > args.units:
         fail(f"OVERSOLD: {confirmed_units} units confirmed against {args.units} on hand")
-    if confirmed_units != args.units:
+    if expected is not None and confirmed_units != expected:
         if UNREACHABLE:
             # A service was down, so demand never reached the reserve step. The exact count is not
             # measurable for this run; what is still claimed, and checked, is that nothing
             # oversold and no invariant broke.
-            info(f"cannot assert exactly {args.units} confirmed: a service was unreachable, so "
+            info(f"cannot assert exactly {expected} confirmed: a service was unreachable, so "
                  f"only {placed} order(s) were ever created")
         else:
-            fail(f"expected exactly {args.units} confirmed units, got {confirmed_units}\n"
-                 f"      {describe(after)}")
+            reasons = sql(f"select coalesce(failure_reason, '?'), count(*) from order_svc.orders "
+                          f"where sku = '{args.sku}' and saga_step = 'FAILED' "
+                          f"and created_at >= '{since}' group by 1")
+            fail(f"expected exactly {expected} confirmed units, got {confirmed_units}\n"
+                 f"      {describe(after)}; failed by reason: {reasons}")
+    elif expected is None:
+        info("stock was contended and some payments declined, so the confirmed count depends on "
+             "timing; asserting no oversell and every invariant instead")
     if violations:
         fail(f"{len(violations)} invariant violation(s) during the storm")
     ok(f"{args.orders} orders for {args.units} unit(s): exactly {confirmed_units} unit(s) confirmed, "
@@ -254,8 +293,18 @@ def command_inject(args):
 
     Clearing `published_at` makes the relay send the row again, which is a real
     duplicate delivery rather than a simulated one. For `reorder` the oldest event
-    of an order is re-announced after the ones that followed it, so it arrives late.
+    of an order is re-announced after the ones that followed it, so it arrives late. `poison`
+    publishes something that is not an event at all, straight to the broker, so every consumer
+    has to set it aside without stalling the orders behind it.
     """
+    if args.mode == "poison":
+        result = subprocess.run(["docker", "compose", "exec", "-T", "redpanda", "rpk", "topic", "produce",
+                                 "fulfillops", "-k", args.order], input="this is not an event\n",
+                                cwd=ROOT, capture_output=True, text=True)
+        if result.returncode != 0:
+            fail(f"could not publish: {result.stderr.strip()}")
+        ok(f"published an unreadable message keyed {args.order}")
+        return
     if args.mode == "duplicate":
         rows = sql(f"""select o.event_id, o.type from order_svc.outbox o
                        where o.order_number = '{args.order}' and o.published_at is not null
@@ -321,10 +370,13 @@ def check(since=None):
 
 
 def fixture_orders():
-    """Orders the demo profile inserted directly, which never went through the saga."""
+    """Orders the demo profile inserted directly, which never went through the saga.
+
+    An order placed through the API writes its reserve command in the same transaction, so an
+    order with no outbox event at all can only have been inserted straight into the table.
+    """
     return count("""select count(*) from order_svc.orders o
-                    left join payment_svc.payments p on p.order_number = o.order_number
-                    where p.order_number is null and o.created_at < now() - interval '10 minutes'""")
+                    where not exists (select 1 from order_svc.outbox e where e.order_number = o.order_number)""")
 
 
 def main():
@@ -361,7 +413,7 @@ def main():
     check_parser.set_defaults(run=command_check)
 
     inject = sub.add_parser("inject", help="re-publish events, to test redelivery")
-    inject.add_argument("mode", choices=["duplicate", "reorder"])
+    inject.add_argument("mode", choices=["duplicate", "reorder", "poison"])
     inject.add_argument("--order", required=True)
     inject.add_argument("--count", type=int, default=1)
     inject.set_defaults(run=command_inject)
