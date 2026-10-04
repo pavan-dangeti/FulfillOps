@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import com.fulfillops.common.Event;
 import com.fulfillops.common.Outbox;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +47,7 @@ class ReconciliationJobTest {
     @Autowired OrderRepository orders;
     @Autowired Outbox outbox;
     @Autowired JdbcClient jdbc;
+    @Autowired MeterRegistry registry;
 
     @MockitoBean SagaPeers peers;
 
@@ -90,6 +92,33 @@ class ReconciliationJobTest {
 
     private List<String> pending() {
         return jdbc.sql("select type from outbox order by id").query(String.class).list();
+    }
+
+    /**
+     * The scheduler calls run(), not reconcile(). An advance is only saved if run() reaches
+     * reconcile() inside a transaction, so this goes in the way production does and reloads.
+     */
+    @Test
+    void anAdvanceMadeOnTheScheduledPathIsSaved() {
+        Order order = orderAt(Order.SagaStep.RESERVED);
+        when(peers.payment(order.getOrderNumber()))
+                .thenReturn(new SagaPeers.Payment(order.getOrderNumber(), "CHARGED"));
+
+        job.run();
+
+        assertThat(orders.findByOrderNumber(order.getOrderNumber()).orElseThrow().getSagaStep())
+                .isEqualTo(Order.SagaStep.PAID);
+    }
+
+    @Test
+    void repairsAreCountedByWhatWasDone() {
+        double before = registry.counter("reconciliation.repairs", "action", "resumed").count();
+        orderAt(Order.SagaStep.STARTED);  // nothing holds stock for it, so the reserve is re-sent
+
+        job.run();
+
+        assertThat(registry.counter("reconciliation.repairs", "action", "resumed").count())
+                .isEqualTo(before + 1);
     }
 
     @Test

@@ -1,0 +1,24 @@
+# Alerts on the two signals that mean an order may be stuck. They show as firing at
+# http://localhost:9090/alerts; no Alertmanager is configured, so nothing pages anyone.
+groups:
+  - name: fulfillops
+    rules:
+      - alert: EventsDeadLettered
+        expr: increase(messaging_dead_lettered_total[10m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: "{{ $labels.application }} dead-lettered {{ $value | humanize }} event(s) in 10 minutes"
+          description: >-
+            A handler could not process an event and it was set aside on fulfillops.dlt.
+            Reconciliation will retry the order's step, but the cause needs fixing; see the
+            runbook in docs/design.md.
+      - alert: OutboxNotDraining
+        expr: min_over_time(outbox_unpublished[5m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: "{{ $labels.application }} has had unpublished events for 5 minutes"
+          description: >-
+            The relay is not reaching the broker, so this service's events are written but not
+            delivered. Check the broker and the relay's logs.

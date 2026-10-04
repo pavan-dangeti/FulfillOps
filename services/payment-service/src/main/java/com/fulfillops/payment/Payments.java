@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
  * Simulated card payments. The order number is the idempotency key: the
  * unique constraint on {@code payments.order_number} means an order can be
  * charged at most once, however many times the charge is retried or replayed.
+ *
+ * <p>A configurable share of charges is declined. The decision is a function of the order number
+ * and is stored under the same key, so asking again — a redelivery, or reconciliation
+ * re-announcing the reservation — always gets the first answer and never turns a decline into a
+ * charge.
  */
 @Service
 public class Payments {
@@ -20,9 +26,19 @@ public class Payments {
     }
 
     private final JdbcClient jdbc;
+    private final int declinePercent;
 
-    public Payments(JdbcClient jdbc) {
+    public Payments(JdbcClient jdbc, @Value("${fulfillops.payment.decline-percent:0}") int declinePercent) {
+        if (declinePercent < 0 || declinePercent > 100) {
+            throw new IllegalArgumentException("decline-percent must be 0..100, not " + declinePercent);
+        }
         this.jdbc = jdbc;
+        this.declinePercent = declinePercent;
+    }
+
+    /** Deterministic per order: String.hashCode is specified, so every run declines the same orders. */
+    static boolean declines(String orderNumber, int percent) {
+        return Math.floorMod(orderNumber.hashCode(), 100) < percent;
     }
 
     @Transactional
@@ -31,10 +47,11 @@ public class Payments {
             throw new IllegalArgumentException("Charge amount must be positive");
         }
         jdbc.sql("""
-                        insert into payments (order_number, amount, status) values (:order, :amount, 'CHARGED')
+                        insert into payments (order_number, amount, status) values (:order, :amount, :status)
                         on conflict (order_number) do nothing""")
                 .param("order", orderNumber)
                 .param("amount", amount)
+                .param("status", declines(orderNumber, declinePercent) ? "DECLINED" : "CHARGED")
                 .update();
         Payment payment = get(orderNumber);
         if (payment.amount().compareTo(amount) != 0) {
