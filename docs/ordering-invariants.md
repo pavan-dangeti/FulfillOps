@@ -111,14 +111,15 @@ could pass by the damage landing outside the saga and meaning nothing.
 | `broker` | `docker compose restart redpanda` | 300 | exactly 100 confirmed, all invariants held |
 | `duplicate` | 30 events re-published for 10 confirmed orders | — | nothing changed |
 | `reorder` | each order's first event re-announced after its last | — | nothing changed |
-| `declines` | 20% of payments declined, 100 orders for 100 units | — | 21–34 declined per run; each failed and was compensated, every other order confirmed |
+| `declines` | 20% of payments declined, 100 orders for 100 units | — | 15–34 declined per run; each failed and was compensated, every other order confirmed |
 | `poison` | an unreadable message published to the topic | — | dead-lettered once by each of the 4 consumers; the next burst confirmed exactly 100 |
 
 Reproduce with `./scripts/chaos.sh`, or one scenario with `./scripts/chaos.sh declines`. The table is
 from three full runs on fresh stacks (Apple M5, 10 cores, Docker with 8 GB), each after a storm and
 one or three k6 runs had loaded the stack, before and after the memory tuning in
-[`performance.md`](performance.md). All three passed every scenario. A fourth run, made before the
-last harness fix below, failed three scenarios; that failure is explained there.
+[`performance.md`](performance.md). All three passed every scenario, and so did the `invariants` CI job on an ubuntu-latest runner
+(`gh workflow run ci -f chaos=true`). A fourth local run, made before the last harness fix below,
+failed three scenarios; that failure is explained there.
 
 `SIGKILL` rather than `SIGTERM`: no shutdown hook, no flush, nothing given a chance to tidy up.
 
