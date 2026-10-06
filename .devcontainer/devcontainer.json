@@ -12,7 +12,9 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/java:1": { "version": "21" },
-    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    // So `gh codespace ssh` works: drive the Codespace from your own terminal instead of the browser.
+    "ghcr.io/devcontainers/features/sshd:1": {}
   },
   // The smallest Codespace, which is enough: on 2 CPUs and 8 GB, scripts/measure-host.sh measured
   // a cold build of every image at 321 s and 3.4 GB, a cold start at 213 s, and 4.2 GB at peak
