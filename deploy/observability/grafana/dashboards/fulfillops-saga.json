@@ -120,8 +120,8 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{application=~\"$application\"}[1m])) by (service)",
-          "legendFormat": "{{service}}"
+          "expr": "sum(rate(http_server_requests_seconds_count{application=~\"$application\"}[1m])) by (application)",
+          "legendFormat": "{{application}}"
         }
       ]
     },

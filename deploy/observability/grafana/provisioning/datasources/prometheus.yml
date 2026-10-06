@@ -1,6 +1,9 @@
 apiVersion: 1
 datasources:
   - name: Prometheus
+    # A fixed uid, because the dashboard's Service variable refers to the datasource by it. Left to
+    # Grafana, the uid is random, the variable cannot resolve, and every panel filtered by it is empty.
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090

@@ -54,6 +54,11 @@ management:
       # One label to group every series by service, so the dashboard needs one set of queries
       # rather than four.
       application: ${spring.application.name}
+    distribution:
+      # Latency buckets for the dashboard's p50/p95/p99. Without them those panels have nothing
+      # to compute a quantile from.
+      percentiles-histogram:
+        http.server.requests: true
   tracing:
     sampling:
       # 1.0 keeps every trace. Lower it for a load test: tracing every span of a burst is a real
