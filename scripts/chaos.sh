@@ -210,7 +210,10 @@ scenario_reorder() {
 scenario_declines() {
   local percent=${DECLINE_PERCENT:-20} orders=${DECLINE_ORDERS:-100} declined
   printf '\n%s\n' "--- payment declines (${percent}%) ---"
-  PAYMENT_DECLINE_PERCENT=$percent docker compose up -d --wait payment-service >/dev/null 2>&1
+  # --no-deps: without it compose also recreates any dependency whose configuration it thinks has
+  # changed — order-service included, if this shell's SPRING_PROFILES_ACTIVE differs from the one the
+  # stack was started with — and the scenario would be measuring a restart it did not intend.
+  PAYMENT_DECLINE_PERCENT=$percent docker compose up -d --wait --no-deps payment-service >/dev/null 2>&1
   "$HARNESS" setup --sku "$SKU" --units "$orders" >/dev/null || { fail "could not reset state"; return; }
   if "$HARNESS" storm --orders "$orders" --units "$orders" --quantity 1 --sku "$SKU" \
       --concurrency "$CONCURRENCY" --settle-timeout "$SETTLE_TIMEOUT" >/tmp/chaos-burst.log 2>&1; then
@@ -223,7 +226,7 @@ scenario_declines() {
   else
     fail "payment declines: $(tail -3 /tmp/chaos-burst.log | tr '\n' ' ')"
   fi
-  PAYMENT_DECLINE_PERCENT=0 docker compose up -d --wait payment-service >/dev/null 2>&1
+  PAYMENT_DECLINE_PERCENT=0 docker compose up -d --wait --no-deps payment-service >/dev/null 2>&1
 }
 
 # Messages on the dead-letter topic: the sum of its partitions' high watermarks.
