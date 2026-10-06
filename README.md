@@ -85,10 +85,10 @@ it.
 |---|---|---|---|---|
 | 1 | **300 orders for 100 units → exactly 100 reservations, 0 oversold** | **300 of 300 were told yes** — the naive check-then-write oversells 3× | 300 contenders on a 16-thread pool reserve 1 unit each against 100 on hand | `./mvnw -pl services/inventory-service -am -Dtest=ReservationsTest -Dsurefire.failIfNoSpecifiedTests=false test` |
 | 2 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected** | **921–969 of 1,000 were told yes** across three runs — the same check-then-write with 1,000 contenders, measured at the reservation layer rather than over HTTP | 1,000 concurrent HTTP orders at 100 clients, then nine cross-store invariants; the baseline as row 1 | `./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100` |
-| 3 | **All 9 failure scenarios hold**, 300 orders stranded mid-saga in each crash | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries, 20% of payments declined, a poison message; then the invariants | `./scripts/chaos.sh` |
+| 3 | **All 9 failure scenarios hold**, 263–300 orders caught mid-saga in each crash, on 10 cores and on 2 | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries, 20% of payments declined, a poison message; then the invariants | `./scripts/chaos.sh` |
 | 4 | **~2,980 orders/min, end-to-end p99 1,448–1,526 ms** at 50/s offered; a third run hit a 15 s broker stall (p99 15,907 ms) | — | k6, three runs, Apple M5 / 10 cores / 16 GB, with k6 + 4 services + Postgres + Redpanda on that one host | `RATE=50 DURATION=2m ./scripts/load-test.sh` |
 | 5 | **1,200 orders/min, end-to-end p99 1,118–1,172 ms** at 20/s offered | — | same host, three runs | `RATE=20 DURATION=2m ./scripts/load-test.sh` |
-| 6 | **One order, 13 spans, 4 services** in ~750 ms | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
+| 6 | **One order, 13 spans, 4 services**, confirmed in 445–801 ms across four runs | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
 | 7 | 99 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
 
 **On the baselines.** There is no public benchmark for a bespoke order saga, so the only honest
