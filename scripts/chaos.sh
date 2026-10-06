@@ -25,6 +25,14 @@ CONCURRENCY=${CONCURRENCY:-50}
 SETTLE_TIMEOUT=${SETTLE_TIMEOUT:-240}
 
 HARNESS=./scripts/ordering-harness.py
+
+# Compose fills SPRING_PROFILES_ACTIVE from this shell or from .env. If that differs from the profile
+# the running stack was started with, any `up` below would recreate a service under the other
+# profile — mid-scenario, and with migrations the running database does not expect. Use the
+# running stack's own value.
+SPRING_PROFILES_ACTIVE=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' \
+  "$(docker compose ps -q order-service)" 2>/dev/null | sed -n 's/^SPRING_PROFILES_ACTIVE=//p')
+export SPRING_PROFILES_ACTIVE
 SKU=SKU-STORM
 
 pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
@@ -84,15 +92,22 @@ until_relayed() {
   sleep 3
 }
 
-# Kills a service the way a crash does: no signal handler, no flush, nothing. Then brings it back
-# and waits for its healthcheck, so the next step does not race a service still starting.
+# Kills a service the way a crash does: no signal handler, no flush, nothing. Then starts the same
+# container again — start, not up, which could recreate it with a different configuration — and
+# waits for its healthcheck, so the next step does not race a service still starting.
 crash_service() {
-  local service=$1
+  local service=$1 id
   note "SIGKILL $service mid-saga"
   docker compose kill -s SIGKILL "$service" >/dev/null 2>&1
   sleep 3
   note "starting $service again"
-  docker compose up -d --wait --no-deps "$service" >/dev/null 2>&1
+  docker compose start "$service" >/dev/null 2>&1
+  id=$(docker compose ps -q "$service")
+  for _ in $(seq 180); do
+    [ "$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null)" = healthy ] && return 0
+    sleep 1
+  done
+  note "$service was not healthy within 180 s"
 }
 
 # Watches how many orders are stranded at each moment, so a scenario cannot pass by being
