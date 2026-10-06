@@ -81,14 +81,4 @@ export const useStore = create<OpsStore>((set) => ({
   setSceneReady: (sceneReady) => set({ sceneReady }),
 }));
 
-// Helper the App uses to rebuild the scene model from current store state.
-export function currentUi() {
-  const st = useStore.getState();
-  return {
-    statusFilter: st.statusFilter,
-    planes: st.planes,
-    isolate: st.isolate,
-  };
-}
-
 export { sceneState };

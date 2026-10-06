@@ -16,10 +16,6 @@ export type SagaStep =
   | 'CONFIRMED'
   | 'FAILED';
 
-export function isSettled(step: SagaStep | null | undefined): boolean {
-  return step === 'CONFIRMED' || step === 'FAILED';
-}
-
 export interface StockItem {
   id: string;
   sku: string;
@@ -85,10 +81,6 @@ export type StoreId = 'seller' | 'cs';
 // Selection keys are "store:orderNumber" — order numbers collide across the
 // two stores by design (that is the divergence), so the store must be part of
 // the identity. The scene-state attribute drops the prefix (plain orderNumber).
-export function selectionKey(store: StoreId, orderNumber: string): string {
-  return `${store}:${orderNumber}`;
-}
-
 export function parseSelection(key: string): { store: StoreId; orderNumber: string } | null {
   const i = key.indexOf(':');
   if (i < 0) return null;
