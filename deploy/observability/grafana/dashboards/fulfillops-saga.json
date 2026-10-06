@@ -107,7 +107,24 @@
           "expr": "sum(inbox_processed_total) or vector(0)",
           "legendFormat": "claimed"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "type": "timeseries",
@@ -142,15 +159,15 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=~\"$application\"}[1m])) by (le, application))",
-          "legendFormat": "p50 {{service}}"
+          "legendFormat": "{{application}} p50"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=~\"$application\"}[1m])) by (le, application))",
-          "legendFormat": "p95 {{service}}"
+          "legendFormat": "{{application}} p95"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=~\"$application\"}[1m])) by (le, application))",
-          "legendFormat": "p99 {{service}}"
+          "legendFormat": "{{application}} p99"
         }
       ]
     },
