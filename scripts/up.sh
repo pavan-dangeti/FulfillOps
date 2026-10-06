@@ -26,7 +26,9 @@ start_frontend() {
   local name=$1 dir=$2
   shift 2
   [ -d "$dir/node_modules" ] || (cd "$dir" && npm ci --silent)
-  (cd "$dir" && nohup "$@" >"$RUN/$name.log" 2>&1 & echo $! >"$RUN/$name.pid")
+  # The braces matter: without them `&` backgrounds the whole `cd && nohup` list, $! is that
+  # subshell's pid, and stopping it would leave the dev server running on its port.
+  (cd "$dir" && { nohup "$@" >"$RUN/$name.log" 2>&1 & echo $! >"$RUN/$name.pid"; })
 }
 
 wait_for() {
