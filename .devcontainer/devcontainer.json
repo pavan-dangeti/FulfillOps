@@ -5,9 +5,13 @@
 //   ./scripts/up.sh
 {
   "name": "FulfillOps",
-  "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",
+  // The plain base image, with Java as a feature: the Java image carries an apt source for Yarn
+  // whose signing key no longer verifies, which fails every apt-get update, the Docker feature's
+  // included.
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/java:1": { "version": "21" },
     "ghcr.io/devcontainers/features/node:1": { "version": "22" }
   },
   // The smallest Codespace, which is enough: on 2 CPUs and 8 GB, scripts/measure-host.sh measured
