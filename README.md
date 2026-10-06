@@ -42,6 +42,38 @@ it filmed. Recreate it with `node e2e-tests/record-demo.mjs`.
 in **seed mode**: the deployed demo is front-end only, with no backend behind it. The video is what
 shows the real system. See [Limitations](#limitations).
 
+### Run the real thing yourself
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pavan-dangeti/FulfillOps?quickstart=1)
+
+The whole system — five services, Postgres, Redpanda, Jaeger, Prometheus, Grafana and both front
+ends — in a browser tab. It runs on **your own** GitHub account's free Codespaces allowance, on the
+smallest machine (2 cores, 8 GB), so it uses the fewest of your core-hours.
+
+**The first start is slow, by design.** There are no prebuilt images — prebuilds would bill this
+repository's owner for storage — so everything is built in your Codespace. On a fresh 2-core
+Codespace the environment took **3 min 19 s** to be ready, and the first `./scripts/up.sh` **5 min
+50 s**. After that the images are cached, so later starts skip the build.
+
+```bash
+./scripts/up.sh          # first time: builds every image, then starts everything
+```
+
+The Ops floor opens in a new tab, live; the seller app is on the **Ports** tab (`seller` /
+`seller-dev-password`). Then prove the two claims at the top of this page:
+
+```bash
+# 1,000 orders at once for 100 units: exactly 100 confirm, and every invariant holds
+./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100
+
+# kill each service mid-order, restart the broker, duplicate, reorder, decline and poison
+# messages — then check nothing was oversold, lost or charged twice (~6 minutes on 2 cores)
+./scripts/chaos.sh
+```
+
+Watch the storm cross the ops floor while it runs. Stop the Codespace when you are done; an idle one
+still uses your allowance until it times out.
+
 ---
 
 ## Results
