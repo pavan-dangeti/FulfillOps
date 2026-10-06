@@ -47,6 +47,8 @@ reset_state() {
 
 # Fires a burst without waiting for it to settle, so the damage can land mid-flight.
 burst() {
+  # The database's clock, the one created_at uses, so until_placed counts this burst and no other.
+  BURST_SINCE=$(docker compose exec -T postgres psql -U postgres -d fulfillops -t -A -c "select now()")
   touch /tmp/chaos-watching
   watch_stranded &
   WATCH_PID=$!
@@ -65,16 +67,16 @@ wait_for_burst() {
   return $?
 }
 
-in_flight() {
-  docker compose exec -T postgres psql -U postgres -d fulfillops -t -A \
-    -c "select count(*) from order_svc.orders where saga_step not in ('CONFIRMED','FAILED')" 2>/dev/null
-}
-
-# Holds the damage until orders are actually mid-saga, so it lands in flight however fast the
-# machine is placing them.
-until_in_flight() {
-  for _ in $(seq 300); do
-    [ "$(in_flight)" -gt 0 ] 2>/dev/null && return 0
+# Holds the damage until the whole burst has been placed. order-service and inventory-service are
+# on the synchronous path of placing an order, so killing either while orders are still being
+# placed tests rejection at the door, not recovery mid-saga; on a 2-core machine placing 300 orders
+# takes long enough for that to happen.
+until_placed() {
+  local placed
+  for _ in $(seq 600); do
+    placed=$(docker compose exec -T postgres psql -U postgres -d fulfillops -t -A \
+      -c "select count(*) from order_svc.orders where created_at >= '$BURST_SINCE'" 2>/dev/null)
+    [ "${placed:-0}" -ge "$ORDERS" ] && return 0
     sleep 0.2
   done
 }
@@ -161,7 +163,7 @@ scenario_kill_service() {
   printf '\n%s\n' "--- kill $service mid-saga ---"
   reset_state
   burst
-  until_in_flight
+  until_placed
   crash_service "$service"
   local outcome=0
   wait_for_burst || outcome=1
@@ -178,7 +180,7 @@ scenario_restart_broker() {
   printf '\n%s\n' "--- restart the broker mid-saga ---"
   reset_state
   burst
-  until_in_flight
+  until_placed
   note "restarting redpanda"
   docker compose restart redpanda >/dev/null 2>&1
   docker compose up -d --wait --no-deps redpanda >/dev/null 2>&1
@@ -308,7 +310,7 @@ else
   SCENARIOS="$*"
 fi
 
-printf 'chaos: %s orders for %s unit(s) at %s concurrent clients, damage once orders are mid-saga\n' \
+printf 'chaos: %s orders for %s unit(s) at %s concurrent clients, damage once the burst is placed\n' \
   "$ORDERS" "$UNITS" "$CONCURRENCY"
 
 for scenario in $SCENARIOS; do

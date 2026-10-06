@@ -70,7 +70,7 @@ FulfillOps is up.
   1,000 orders for 100 units, then every invariant:
     ./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100
 
-  Break things mid-order and check nothing was oversold, lost or double-charged (~15 minutes):
+  Break things mid-order and check nothing was oversold, lost or double-charged (~6 minutes):
     ./scripts/chaos.sh
 
   Stop:  ./scripts/up.sh down
