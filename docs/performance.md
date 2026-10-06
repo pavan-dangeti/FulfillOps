@@ -172,6 +172,32 @@ fell, from roughly 400–450 MB each to 295–350 MB, because of the arena cap.
 
 ---
 
+## How big a machine it needs
+
+**Method.** `scripts/measure-host.sh` builds and runs the committed tree inside one Docker-in-Docker
+container capped at a CPU count and a memory limit — what a Codespace or any single host looks like
+from the inside — and samples that container's memory once a second. The build is cold: no Maven
+cache, no images. Memory includes reclaimable page cache, so the peaks are upper bounds.
+
+```bash
+CPUS=2 MEMORY=8g ./scripts/measure-host.sh
+```
+
+| Phase, on 2 CPUs and 8 GB | Time | Peak memory |
+|---|---|---|
+| Cold build of every image | 321 s | 3,392 MB |
+| Cold start, observability included, until every healthcheck passes | 213 s | 4,160 MB |
+| 1,000-order storm, then every invariant | 35 s | 4,163 MB |
+| Idle, a minute later | — | 4,046 MB |
+
+The dev container itself — Docker, the whole stack and both front-end dev servers, everything a
+Codespace runs except the editor — used **3.65 GiB** after `./scripts/up.sh` and a 1,000-order storm
+(`docker stats` on the container built by `npx @devcontainers/cli up --workspace-folder .`). So the
+smallest Codespace, 2 cores and 8 GB, is enough, and it is what `.devcontainer/devcontainer.json`
+asks for: allowances are counted in core-hours, so a visitor gets twice the time on 2 cores as on 4.
+
+---
+
 ## Tracing one order end to end
 
 ```bash

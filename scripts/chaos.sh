@@ -18,14 +18,21 @@ cd "$(dirname "$0")/.."
 ORDERS=${ORDERS:-300}
 UNITS=${UNITS:-100}
 CONCURRENCY=${CONCURRENCY:-50}
-# How long after the burst starts the damage lands. The burst is placed in a couple of seconds and
-# the saga takes a few more, so this lands while messages are still moving.
-KILL_AFTER=${KILL_AFTER:-1}
+# Every wait below is for a condition, not a number of seconds: the same script has to work on a
+# 10-core laptop and on a 2-core Codespace, where a service takes a minute to restart.
 # Long enough for reconciliation to notice a stranded order: it runs on a 60s timer and only
 # considers orders older than its 30s grace period.
 SETTLE_TIMEOUT=${SETTLE_TIMEOUT:-240}
 
 HARNESS=./scripts/ordering-harness.py
+
+# Compose fills SPRING_PROFILES_ACTIVE from this shell or from .env. If that differs from the profile
+# the running stack was started with, any `up` below would recreate a service under the other
+# profile — mid-scenario, and with migrations the running database does not expect. Use the
+# running stack's own value.
+SPRING_PROFILES_ACTIVE=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' \
+  "$(docker compose ps -q order-service)" 2>/dev/null | sed -n 's/^SPRING_PROFILES_ACTIVE=//p')
+export SPRING_PROFILES_ACTIVE
 SKU=SKU-STORM
 
 pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
@@ -40,6 +47,8 @@ reset_state() {
 
 # Fires a burst without waiting for it to settle, so the damage can land mid-flight.
 burst() {
+  # The database's clock, the one created_at uses, so until_placed counts this burst and no other.
+  BURST_SINCE=$(docker compose exec -T postgres psql -U postgres -d fulfillops -t -A -c "select now()")
   touch /tmp/chaos-watching
   watch_stranded &
   WATCH_PID=$!
@@ -58,16 +67,49 @@ wait_for_burst() {
   return $?
 }
 
-# Kills a service the way a crash does: no signal handler, no flush, nothing.
+# Holds the damage until the whole burst has been placed. order-service and inventory-service are
+# on the synchronous path of placing an order, so killing either while orders are still being
+# placed tests rejection at the door, not recovery mid-saga; on a 2-core machine placing 300 orders
+# takes long enough for that to happen.
+until_placed() {
+  local placed
+  for _ in $(seq 600); do
+    placed=$(docker compose exec -T postgres psql -U postgres -d fulfillops -t -A \
+      -c "select count(*) from order_svc.orders where created_at >= '$BURST_SINCE'" 2>/dev/null)
+    [ "${placed:-0}" -ge "$ORDERS" ] && return 0
+    sleep 0.2
+  done
+}
+
+# Waits until every service's outbox has sent everything, then gives the consumers a moment.
+until_relayed() {
+  local query="select (select count(*) from order_svc.outbox where published_at is null)
+    + (select count(*) from inventory_svc.outbox where published_at is null)
+    + (select count(*) from payment_svc.outbox where published_at is null)
+    + (select count(*) from fulfilment_svc.outbox where published_at is null)"
+  for _ in $(seq 120); do
+    [ "$(docker compose exec -T postgres psql -U postgres -d fulfillops -t -A -c "$query" 2>/dev/null)" = 0 ] && break
+    sleep 1
+  done
+  sleep 3
+}
+
+# Kills a service the way a crash does: no signal handler, no flush, nothing. Then starts the same
+# container again — start, not up, which could recreate it with a different configuration — and
+# waits for its healthcheck, so the next step does not race a service still starting.
 crash_service() {
-  local service=$1
+  local service=$1 id
   note "SIGKILL $service mid-saga"
   docker compose kill -s SIGKILL "$service" >/dev/null 2>&1
   sleep 3
   note "starting $service again"
   docker compose start "$service" >/dev/null 2>&1
-  # The outbox relay or listener needs a moment to reconnect to the broker and the database.
-  sleep 5
+  id=$(docker compose ps -q "$service")
+  for _ in $(seq 180); do
+    [ "$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null)" = healthy ] && return 0
+    sleep 1
+  done
+  note "$service was not healthy within 180 s"
 }
 
 # Watches how many orders are stranded at each moment, so a scenario cannot pass by being
@@ -121,7 +163,7 @@ scenario_kill_service() {
   printf '\n%s\n' "--- kill $service mid-saga ---"
   reset_state
   burst
-  sleep "$KILL_AFTER"
+  until_placed
   crash_service "$service"
   local outcome=0
   wait_for_burst || outcome=1
@@ -138,10 +180,10 @@ scenario_restart_broker() {
   printf '\n%s\n' "--- restart the broker mid-saga ---"
   reset_state
   burst
-  sleep "$KILL_AFTER"
+  until_placed
   note "restarting redpanda"
   docker compose restart redpanda >/dev/null 2>&1
-  sleep 8
+  docker compose up -d --wait --no-deps redpanda >/dev/null 2>&1
   local outcome=0
   wait_for_burst || outcome=1
   stop_watching
@@ -174,7 +216,7 @@ scenario_duplicate() {
   done
   note "re-queued $redelivered event(s) for $orders confirmed order(s)"
   # Let the relay deliver the duplicates and the consumers react (or not).
-  sleep 12
+  until_relayed
   if "$HARNESS" check >/tmp/chaos-check.log 2>&1; then
     pass "duplicate delivery: $redelivered redelivered event(s) changed nothing"
   else
@@ -196,7 +238,7 @@ scenario_reorder() {
     "$HARNESS" inject reorder --order "$order" >/dev/null 2>&1 && late=$((late + 1))
   done
   note "re-announced the first event of $late confirmed order(s) after the last"
-  sleep 12
+  until_relayed
   if "$HARNESS" check >/tmp/chaos-check.log 2>&1; then
     pass "reordered delivery: $late out-of-order event(s) changed nothing"
   else
@@ -210,7 +252,10 @@ scenario_reorder() {
 scenario_declines() {
   local percent=${DECLINE_PERCENT:-20} orders=${DECLINE_ORDERS:-100} declined
   printf '\n%s\n' "--- payment declines (${percent}%) ---"
-  PAYMENT_DECLINE_PERCENT=$percent docker compose up -d --wait payment-service >/dev/null 2>&1
+  # --no-deps: without it compose also recreates any dependency whose configuration it thinks has
+  # changed — order-service included, if this shell's SPRING_PROFILES_ACTIVE differs from the one the
+  # stack was started with — and the scenario would be measuring a restart it did not intend.
+  PAYMENT_DECLINE_PERCENT=$percent docker compose up -d --wait --no-deps payment-service >/dev/null 2>&1
   "$HARNESS" setup --sku "$SKU" --units "$orders" >/dev/null || { fail "could not reset state"; return; }
   if "$HARNESS" storm --orders "$orders" --units "$orders" --quantity 1 --sku "$SKU" \
       --concurrency "$CONCURRENCY" --settle-timeout "$SETTLE_TIMEOUT" >/tmp/chaos-burst.log 2>&1; then
@@ -223,7 +268,7 @@ scenario_declines() {
   else
     fail "payment declines: $(tail -3 /tmp/chaos-burst.log | tr '\n' ' ')"
   fi
-  PAYMENT_DECLINE_PERCENT=0 docker compose up -d --wait payment-service >/dev/null 2>&1
+  PAYMENT_DECLINE_PERCENT=0 docker compose up -d --wait --no-deps payment-service >/dev/null 2>&1
 }
 
 # Messages on the dead-letter topic: the sum of its partitions' high watermarks.
@@ -240,8 +285,11 @@ scenario_poison() {
   printf '\n%s\n' "--- poison message ---"
   before=$(dead_lettered)
   "$HARNESS" inject poison --order ORD-POISON >/dev/null || { fail "poison message: could not publish"; return; }
-  sleep 15
-  after=$(dead_lettered)
+  for _ in $(seq 60); do
+    after=$(dead_lettered)
+    [ $((after - before)) -ge 4 ] && break
+    sleep 2
+  done
   note "dead-letter topic: $before -> $after message(s)"
   reset_state
   if ! "$HARNESS" storm --orders "$ORDERS" --units "$UNITS" --quantity 1 --sku "$SKU" \
@@ -262,8 +310,8 @@ else
   SCENARIOS="$*"
 fi
 
-printf 'chaos: %s orders for %s unit(s) at %s concurrent clients, damage %ss in\n' \
-  "$ORDERS" "$UNITS" "$CONCURRENCY" "$KILL_AFTER"
+printf 'chaos: %s orders for %s unit(s) at %s concurrent clients, damage once the burst is placed\n' \
+  "$ORDERS" "$UNITS" "$CONCURRENCY"
 
 for scenario in $SCENARIOS; do
   case "$scenario" in
