@@ -6,3 +6,7 @@
 **/test-results
 .git
 .env
+# Editor and tool state never belongs in an image's build context.
+**/.DS_Store
+.serena
+.devcontainer

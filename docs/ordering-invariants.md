@@ -93,7 +93,8 @@ machine rather than of the design. Both runs confirmed exactly 100 units.
 
 The placement rate is an observation, not a benchmark. The `inventory` service is the bottleneck by
 design: every order's reserve step contends on one product row, which is the point being tested. A
-real capacity number needs a load-test method and stated hardware, which is the next phase.
+real capacity number needs a load-test method and stated hardware; that is in
+[`performance.md`](performance.md).
 
 ### Failure injection
 
