@@ -1,21 +1,17 @@
 # Ops Floor — Three.js Operations Visualization
 
-A third frontend that reads the same order/inventory domain as the other two
-apps but renders it, rather than tabulating it. Where the seller dashboard and
-the CS console each show *their own* store, Ops Floor puts both stores on one
-floor at once — so the thing the other two apps can't show you (that they
-disagree) becomes the picture.
+The live view of the order system. In live mode it polls the CS console's read-only feed and puts
+every order on a 3D floor, laned by status, so a 1,000-order storm is something you watch: orders
+arrive, move through the saga, and settle in their status lane or in FAILED, with every step change
+in the event feed. In seed mode it runs with no backend at all, which is what the public deployment does.
 
 ## Why a third app, and why Three.js
 
-- **The divergence is the point, and a table can't show it well.** In the
-  project's original design, ORD-1039 through ORD-1042 existed in both the
-  Angular in-memory store and the Spring H2 store, with different customers,
-  quantities, statuses and totals. The seed mode replays that dataset (the
-  apps now share one order store; see `TRADEOFFS.md`). A side-by-side
-  table makes you diff four rows by eye. A spatial view can put both parcels
-  on the floor and draw the mismatch as a line between them — proximity and
-  color do the noticing for you.
+- **Some things read better as a picture.** A storm of a thousand orders, or the gap between two
+  records of the same order, is hard to see in a table and easy to see on a floor. The project
+  began with the seller app and the CS console reading two different stores that disagreed; seed
+  mode still replays that dataset, and draws each disagreement as a line between the two parcels
+  (the apps now share one order store; see `TRADEOFFS.md`).
 - **Why not an Angular component.** Angular's change detection and zone.js
   are built around discrete UI updates, not a 60fps render loop driving
   hundreds of instanced meshes. A separate Vite + React + react-three-fiber
@@ -38,16 +34,15 @@ disagree) becomes the picture.
   PROCESSING ─┤   [SKU-1001] [SKU-1002] ├─   PROCESSING
   SHIPPED    ─┤   [SKU-1003] [SKU-1004] ├─   SHIPPED
   DELIVERED  ─┘   [SKU-1005]            ├─   DELIVERED
-                                        └─   REFUNDED   ← seller has no
-                                                            REFUNDED lane —
-                                                            the Angular model
-                                                            has no such status
+                                        ├─   REFUNDED   ← outcomes the seller
+                                        └─   FAILED       model has no lane for
 ```
 
 - **Two planes, one floor.** Seller orders (Angular's 5 seeded orders) on the
-  left, CS orders (Spring's 12 seeded orders) on the right, each parceled
-  onto lanes by status. The seller plane physically has four lanes; the CS
-  plane has a fifth REFUNDED lane. That absence is deliberate — it's the same
+  left, CS orders on the right — Spring's 12 seeded orders, or every real
+  order in live mode — each parceled onto lanes by status. The seller plane
+  physically has four lanes; the CS plane adds REFUNDED and FAILED, where an
+  order lands when the saga gives up. That absence is deliberate — it's the same
   argument `TRADEOFFS.md` makes about the seller store, rendered as geometry
   instead of prose.
 - **A SKU column down the middle.** Five towers, one per product, fill height

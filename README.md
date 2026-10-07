@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📦 FulfillOps
+# FulfillOps
 
 **A distributed order system that promises stock is never oversold — and proves it.**
 
@@ -21,6 +21,16 @@
 
 </div>
 
+<p align="center">
+  <img src="docs/media/ops-floor.gif" alt="The 3D ops floor, live: orders placed through the API arrive and move through the saga" width="900">
+</p>
+
+<p align="center">
+  <a href="docs/demo.mp4"><b>▶ Demo video</b></a> (3 min, the real system, recorded by a script) ·
+  <a href="https://fulfill-ops.vercel.app"><b>3D ops floor</b></a> (front end only, seed data) ·
+  <a href="https://codespaces.new/pavan-dangeti/FulfillOps?quickstart=1"><b>Run all of it in a Codespace</b></a>
+</p>
+
 ## The problem, in two sentences
 
 An order has to hold stock, take a customer's money and claim a slot in a warehouse — three
@@ -28,51 +38,6 @@ different databases on three different services — so something will eventually
 through. This system makes that recoverable and then **proves** it: 1,000 orders placed
 simultaneously against 100 units confirm exactly 100, and killing any service mid-order loses
 nothing.
-
-## See it running
-
-**[▶️ 2m50s demo](docs/demo.mp4)** — the real system, filmed live. *(Hosted copy below; download
-[docs/demo.mp4](docs/demo.mp4) if it does not play inline.)*
-
-The video is the primary demo: it was recorded by a script against a running stack, so the orders on
-the 3D floor, the trace in Jaeger and the metrics on the dashboard are all real and were produced as
-it filmed. Recreate it with `node e2e-tests/record-demo.mjs`.
-
-**[→ Try the 3D ops floor](https://fulfill-ops.vercel.app)** — no install required, but note it runs
-in **seed mode**: the deployed demo is front-end only, with no backend behind it. The video is what
-shows the real system. See [Limitations](#limitations).
-
-### Run the real thing yourself
-
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pavan-dangeti/FulfillOps?quickstart=1)
-
-The whole system — five services, Postgres, Redpanda, Jaeger, Prometheus, Grafana and both front
-ends — in a browser tab. It runs on **your own** GitHub account's free Codespaces allowance, on the
-smallest machine (2 cores, 8 GB), so it uses the fewest of your core-hours.
-
-**The first start is slow, by design.** There are no prebuilt images — prebuilds would bill this
-repository's owner for storage — so everything is built in your Codespace. On a fresh 2-core
-Codespace the environment took **3 min 19 s** to be ready, and the first `./scripts/up.sh` **5 min
-50 s**. After that the images are cached, so later starts skip the build.
-
-```bash
-./scripts/up.sh          # first time: builds every image, then starts everything
-```
-
-The Ops floor opens in a new tab, live; the seller app is on the **Ports** tab (`seller` /
-`seller-dev-password`). Then prove the two claims at the top of this page:
-
-```bash
-# 1,000 orders at once for 100 units: exactly 100 confirm, and every invariant holds
-./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100
-
-# kill each service mid-order, restart the broker, duplicate, reorder, decline and poison
-# messages — then check nothing was oversold, lost or charged twice (~6 minutes on 2 cores)
-./scripts/chaos.sh
-```
-
-Watch the storm cross the ops floor while it runs. Stop the Codespace when you are done; an idle one
-still uses your allowance until it times out.
 
 ---
 
@@ -85,10 +50,10 @@ it.
 |---|---|---|---|---|
 | 1 | **300 orders for 100 units → exactly 100 reservations, 0 oversold** | **300 of 300 were told yes** — the naive check-then-write oversells 3× | 300 contenders on a 16-thread pool reserve 1 unit each against 100 on hand | `./mvnw -pl services/inventory-service -am -Dtest=ReservationsTest -Dsurefire.failIfNoSpecifiedTests=false test` |
 | 2 | **1,000 orders for 100 units → exactly 100 confirmed, 900 rejected** | **921–969 of 1,000 were told yes** across three runs — the same check-then-write with 1,000 contenders, measured at the reservation layer rather than over HTTP | 1,000 concurrent HTTP orders at 100 clients, then nine cross-store invariants; the baseline as row 1 | `./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100` |
-| 3 | **All 9 failure scenarios hold**, 300 orders stranded mid-saga in each crash | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries, 20% of payments declined, a poison message; then the invariants | `./scripts/chaos.sh` |
+| 3 | **All 9 failure scenarios hold**, 263–300 orders caught mid-saga in each crash, on 10 cores and on 2 | — | `SIGKILL` per service mid-burst, broker restart, 30 duplicate and 10 reordered re-deliveries, 20% of payments declined, a poison message; then the invariants | `./scripts/chaos.sh` |
 | 4 | **~2,980 orders/min, end-to-end p99 1,448–1,526 ms** at 50/s offered; a third run hit a 15 s broker stall (p99 15,907 ms) | — | k6, three runs, Apple M5 / 10 cores / 16 GB, with k6 + 4 services + Postgres + Redpanda on that one host | `RATE=50 DURATION=2m ./scripts/load-test.sh` |
 | 5 | **1,200 orders/min, end-to-end p99 1,118–1,172 ms** at 20/s offered | — | same host, three runs | `RATE=20 DURATION=2m ./scripts/load-test.sh` |
-| 6 | **One order, 13 spans, 4 services** in ~750 ms | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
+| 6 | **One order, 13 spans, 4 services**, confirmed in 445–801 ms across four runs | — | one `POST /api/orders` traced through every service it touched | `./scripts/trace-order.sh` |
 | 7 | 99 Java tests, 15 Playwright tests, 9 invariants, 4 CI jobs | — | Testcontainers against real Postgres; Pact contracts; full stack rebuilt per run | `./mvnw verify` · `cd e2e-tests && npx playwright test` |
 
 **On the baselines.** There is no public benchmark for a bespoke order saga, so the only honest
@@ -114,81 +79,104 @@ the stalled load-test run and the memory measurements:
 
 ---
 
-## Architecture
+## What it looks like
+
+All captured from a running stack by [`e2e-tests/record-demo.mjs`](e2e-tests/record-demo.mjs), which
+also records the video.
+
+| One order, end to end | The order saga dashboard |
+|---|---|
+| ![A Jaeger trace: one POST /api/orders, 13 spans across order, inventory, payment and fulfilment](docs/media/trace.png) | ![The Grafana dashboard: orders accepted per minute, order-creation p99, outbox backlog, request rate and latency by service](docs/media/dashboard.png) |
+| **Seller app** (Angular) | **Customer service console** (Spring, Thymeleaf) |
+| ![The seller app's orders page, read from order-service](docs/media/seller-dashboard.png) | ![The CS console with one order found, offering Ship and Refund](docs/media/cs-console.png) |
+
+---
+
+## How it works
 
 ```
-                        seller-dashboard (Angular 21)
-                        cs-console (Spring Boot + Thymeleaf)
-                        ops-floor (React + Three.js)
-                                   │  RS256 JWT, verified against order-service's JWKS
-                                   ▼
-  ┌────────────────────────────────────────────────────────────────────────────┐
-  │                          order-service  :8081                              │
-  │   orders · saga_step · the saga · reconciliation · token issuance          │
-  └────────────────────────────────────────────────────────────────────────────┘
-         │                    │                    │                    │
-         │ order.reserve      │ inventory.reserved │ payment.charged      │ fulfilment.allocated
-         │   .requested        │                    │                    │
-         ▼                    ▼                    ▼                    ▼
-  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-  │  inventory   │   │   payment    │   │ fulfilment   │   │  cs-console  │
-  │   :8082      │   │    :8083     │   │    :8084     │   │    :8080     │
-  │ products     │   │ payments     │   │ warehouses   │   │ (no data)    │
-  │ reservations │   │ unique by    │   │ allocations  │   └──────────────┘
-  │ CHECK        │   │ order_number │   │ CHECK        │
-  │ reserved ≤   │   └──────────────┘   │ allocated ≤  │
-  │ on_hand      │                      │ capacity     │  ──► /api/ops (public, read-only)
-  └──────────────┘                      └──────────────┘        to the 3D ops floor
-         │                    │                    │
-         └────────────────────┴────────────────────┘
-                              ▲
-        ┌─────────────────────┴──────────────────────┐
-        │  Redpanda · one topic, keyed by order      │  outbox → relay → topic → inbox → handler
-        └─────────────────────┬──────────────────────┘  every event at-least-once, applied once
-                              │
-   ┌──────────────────────────┴───────────────────────────┐
-   │  one Postgres instance · one schema and login role  │  a role cannot read another's tables
-   │  per service · checked by scripts/check-schema-isolation.sh
-   └──────────────────────────────────────────────────────┘
+  seller-dashboard (Angular) ──────┐
+                                   │  REST, with RS256 tokens verified against order-service's JWKS
+  cs-console (Spring, Thymeleaf) ──┤
+         ▲                         ▼
+         │ /api/ops       ┌────────────────────────────────────────────────────────┐
+  ops-floor (Three.js)    │ order-service: orders, saga state, reconciliation,     │
+                          │ sign-in                                                │
+                          └───────────────────────────┬────────────────────────────┘
+                                                      │ outbox → Redpanda → inbox
+                 ┌────────────────────────────────────┼─────────────────────────────────┐
+                 ▼                                    ▼                                 ▼
+         inventory-service                     payment-service                  fulfilment-service
+         stock and reservations                one row per order:               warehouse slots
+         CHECK reserved ≤ on_hand              charged or declined              CHECK allocated ≤ capacity
 
-  Observability (--profile observability): Jaeger · Prometheus · Grafana
+  One Postgres, with a schema and a login role per service: no service can read another's tables.
+  Changes cross service boundaries only as events, on one Redpanda topic keyed by order number;
+  order-service also reads its peers over HTTP, for prices and for reconciliation.
+  --profile observability adds OpenTelemetry → Jaeger, and Prometheus → Grafana.
 ```
 
 **The order saga.** `POST /api/orders` commits the order *and* the command to reserve its stock in one
-transaction, then the work happens over Kafka: inventory holds the stock, payment takes the money,
-fulfilment claims a slot, order-service confirms. A refused step fails the order, broadcasts one
-compensation request, and each service undoes its own effect.
+transaction. Then each service reacts to the event before it: inventory holds the stock, payment
+takes the money, fulfilment claims a slot, and order-service confirms. A refused step fails the order
+and broadcasts one compensation request, and each service undoes its own effect. A message no handler
+can process is set aside on a dead-letter topic rather than dropped.
 
-Nothing above is a distributed transaction. The guarantees come from a single-database transaction per
-step, at-least-once delivery, and effects that are idempotent — which yields the appearance of
-exactly-once without ever claiming it. [`docs/design.md`](docs/design.md) states the consistency
-model precisely.
-
----
-
-## Running it
-
-```bash
-cp .env.example .env
-docker compose up --build --wait          # Postgres, Redpanda, 4 services, CS console
-
-cd seller-dashboard && npm install && npm start   # :4200, proxies /api to the services
-cd ops-floor && npm install && VITE_SOURCE=live npm run dev   # :5174, live from the real system
-```
-
-Requires Docker with Compose v2 and Node 22. JDK 21 only to run Maven outside Docker (`./mvnw` is
-bundled). Accounts from `.env.example`: seller `seller`/`seller-dev-password`, CS
-`cs`/`cs-dev-password`.
-
-To add the observability stack — traces, metrics, the dashboard on <http://localhost:3000>:
-
-```bash
-docker compose --profile observability up -d --wait
-```
+Nothing here is a distributed transaction. The guarantees come from a single-database transaction per
+step, at-least-once delivery, and effects that are idempotent, which gives the appearance of
+exactly-once without ever claiming it. [`docs/design.md`](docs/design.md) states the consistency model
+precisely, with the saga drawn step by step.
 
 ---
 
-## Tests
+## Run it
+
+### In a Codespace
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pavan-dangeti/FulfillOps?quickstart=1)
+
+The whole system — five services, Postgres, Redpanda, Jaeger, Prometheus, Grafana and both front
+ends — in a browser tab. It runs on **your own** GitHub account's free Codespaces allowance, on the
+smallest machine (2 cores, 8 GB), so it uses the fewest of your core-hours.
+
+**The first start is slow, by design.** There are no prebuilt images — prebuilds would bill this
+repository's owner for storage — so everything is built in your Codespace. On a fresh 2-core
+Codespace the environment took **3 min 19 s** to be ready, and the first `./scripts/up.sh` **5 min
+50 s**. After that the images are cached, so later starts skip the build.
+
+```bash
+./scripts/up.sh          # first time: builds every image, then starts everything
+```
+
+The ops floor (5174), seller app (4200, `seller` / `seller-dev-password`), Grafana and Jaeger are
+on the **Ports** tab. Then prove the two claims at the top of this page:
+
+```bash
+# 1,000 orders at once for 100 units: exactly 100 confirm, and every invariant holds
+./scripts/ordering-harness.py setup --units 100 && ./scripts/ordering-harness.py storm --orders 1000 --units 100
+
+# kill each service mid-order, restart the broker, duplicate, reorder, decline and poison
+# messages — then check nothing was oversold, lost or charged twice (~6 minutes on 2 cores)
+./scripts/chaos.sh
+```
+
+Watch the storm cross the ops floor while it runs. Stop the Codespace when you are done; an idle one
+still uses your allowance until it times out.
+
+### On your machine
+
+Docker with Compose v2, Node 22, and Python 3 for the harness. JDK 21 only to run Maven outside Docker.
+
+```bash
+./scripts/up.sh          # the stack, observability and both front ends; prints every URL
+./scripts/up.sh down     # stop everything
+```
+
+Seller app on <http://localhost:4200> (`seller` / `seller-dev-password`), ops floor on
+<http://localhost:5174>, CS console on <http://localhost:8080> (`cs` / `cs-dev-password`), Grafana on
+<http://localhost:3000>, Jaeger on <http://localhost:16686>.
+
+### Tests
 
 | Suite | Command |
 |---|---|
@@ -214,8 +202,8 @@ gh workflow run ci --ref main -f chaos=true
 Stated plainly, because a limitation you can name is better than one a reviewer finds.
 
 **The live demo is front-end only.** <https://fulfill-ops.vercel.app> runs the 3D ops floor in seed
-mode with no backend behind it. The video and the scripts are what show the real system. The
-constraint is compute, not storage: free Postgres exists, but five JVMs, Postgres and Redpanda need
+mode with no backend behind it. The video, a Codespace and the scripts are what show the real
+system. The constraint is compute, not storage: free Postgres exists, but five JVMs, Postgres and Redpanda need
 a few gigabytes of memory on one always-on host, which no free platform tier offers.
 
 **Declines are simulated, and nothing pages anyone.** A configured share of payments declines,

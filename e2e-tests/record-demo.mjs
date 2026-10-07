@@ -1,14 +1,16 @@
-// Records the demo video. Everything in it is the real system: the orders on the 3D floor are placed
-// through the API while it is being filmed, the trace shown is the one those orders produced, and the
-// dashboard is scraping live.
+// Records the demo video, and a still of each scene for the README. Everything in it is the real
+// system: the orders on the 3D floor are placed through the API while it is being filmed, the trace
+// shown is the one those orders produced, and the dashboard is scraping live.
 //
-//   docker compose --profile observability up -d --wait
-//   npm run start -- --host 127.0.0.1            # in seller-dashboard/
-//   VITE_SOURCE=live npm run dev -- --port 5174   # in ops-floor/
-//   node record-demo.mjs
+//   ./scripts/up.sh                      # the stack, observability and both front ends
+//   node record-demo.mjs                 # GRAFANA_URL=... if Grafana is not on localhost:3000
 //
-// Output: demo-raw/*.webm, then concatenated into docs/demo.mp4. The scenes are deliberately the
-// five things a reviewer cannot get from the README alone.
+// Output: demo-raw/*.webm and docs/media/*.png. Then the video and the README's animation:
+//
+//   ffmpeg -i demo-raw/*.webm -c:v libx264 -crf 28 -preset slow -pix_fmt yuv420p -movflags +faststart ../docs/demo.mp4
+//   ffmpeg -ss 18 -t 12 -i ../docs/demo.mp4 -vf "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer" ../docs/media/ops-floor.gif
+//
+// The scenes are deliberately the five things a reviewer cannot get from the README alone.
 
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
@@ -19,6 +21,8 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, 'demo-raw');
 const ORDER_SERVICE = 'http://localhost:8081';
+const GRAFANA = process.env.GRAFANA_URL ?? 'http://localhost:3000';
+const STILLS = join(HERE, '..', 'docs', 'media');
 const SELLER = { username: 'seller', password: 'seller-dev-password' };
 const SKU = 'SKU-DEMO';
 
@@ -62,9 +66,17 @@ async function caption(page, text, sub) {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// A still for the README, without the caption burned over it.
+async function still(page, name) {
+  await page.evaluate(() => document.getElementById('demo-caption')?.style.setProperty('display', 'none'));
+  await page.screenshot({ path: join(STILLS, `${name}.png`) });
+  await page.evaluate(() => document.getElementById('demo-caption')?.style.removeProperty('display'));
+}
+
 async function main() {
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
+  mkdirSync(STILLS, { recursive: true });
 
   // A product of our own, on a stack with no demo fixtures. The fixtures are inserted straight into
   // the table and never went through the saga, so an unscoped invariant check reports them as
@@ -96,7 +108,9 @@ async function main() {
       quantity: 1,
     }, auth).catch(() => {});
   }, 1400);
-  await wait(34000);
+  await wait(30000);
+  await still(page, 'ops-floor');
+  await wait(4000);
   clearInterval(flooding);
 
   // 2. One order, followed across all four services.
@@ -127,11 +141,13 @@ async function main() {
   await wait(13000);
   await caption(page, `Order ${placed.orderNumber}, end to end`,
     'One request, four services: reserve stock, take payment, claim a slot, confirm');
+  await still(page, 'trace');
   await wait(17000);
 
   // 3. The metrics.
-  await page.goto('http://localhost:3000/d/fulfillops-saga');
+  await page.goto(`${GRAFANA}/d/fulfillops-saga`);
   await wait(9000);
+  await still(page, 'dashboard');
   await caption(page, 'Order saga dashboard',
     'Live from the same stack: acceptance rate and p99, outbox backlog, consumer lag, heap');
   await wait(15000);
@@ -144,6 +160,7 @@ async function main() {
   await page.waitForURL(/orders/, { timeout: 15000 });
   await page.getByTestId('order-search').fill(placed.orderNumber);
   await wait(9000);
+  await still(page, 'cs-console');
   await caption(page, 'Customer service console',
     'A client of order-service holding no order state of its own — refunds and shipping go through the API');
   await wait(12000);
@@ -155,6 +172,7 @@ async function main() {
   await page.getByTestId('sign-in').click();
   await page.waitForURL(/orders/, { timeout: 20000 });
   await wait(8000);
+  await still(page, 'seller-dashboard');
   await caption(page, 'Seller dashboard',
     'Order and inventory straight from the services, with consumer-driven contracts holding the client honest');
   await wait(13000);

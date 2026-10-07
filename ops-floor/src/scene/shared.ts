@@ -47,10 +47,6 @@ export const LANES: { status: AnyStatus; z: number }[] = [
 ];
 
 export const LANE_Z = new Map<string, number>(LANES.map((l) => [l.status as string, l.z]));
-// Four, because the seller model has exactly four statuses. Derived rather than counted by
-// hand so it cannot drift; asserted in the end-to-end suite.
-export const SELLER_LANE_COUNT = 4;
-export const CS_LANE_COUNT = 5;
 
 export const TOWER_SHELL_H = 6.6;
 
@@ -76,8 +72,6 @@ export function totalBucket(total: number): number {
   if (total < 200) return 2;
   return 3;
 }
-
-export const BUCKET_EMISSIVE = [0.25, 1.0, 2.0, 3.6];
 
 // ---------- ui flags the scene derives from ----------
 
@@ -324,10 +318,7 @@ export function startTowerTransition(sku: string, from: number, to: number, dur 
 // ---------- scratch (zero allocation inside useFrame) ----------
 
 export const _obj = new THREE.Object3D();
-export const _v3 = new THREE.Vector3();
-export const _v3b = new THREE.Vector3();
 export const _color = new THREE.Color();
-export const _mat4 = new THREE.Matrix4();
 
 export function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
